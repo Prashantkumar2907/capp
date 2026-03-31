@@ -17,7 +17,7 @@ import { Loader2, UtensilsCrossed } from "lucide-react";
 export default function SignUpPage() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   const {
     register,
@@ -64,6 +64,7 @@ export default function SignUpPage() {
             <Input
               id="name"
               placeholder="John Doe"
+              autoComplete="name"
               {...register("name")}
             />
             {errors.name && (
@@ -76,6 +77,7 @@ export default function SignUpPage() {
               id="email"
               type="email"
               placeholder="you@restaurant.com"
+              autoComplete="email"
               {...register("email")}
             />
             {errors.email && (
@@ -88,6 +90,7 @@ export default function SignUpPage() {
               id="password"
               type="password"
               placeholder="••••••••"
+              autoComplete="new-password"
               {...register("password")}
             />
             {errors.password && (
@@ -100,6 +103,7 @@ export default function SignUpPage() {
               id="confirmPassword"
               type="password"
               placeholder="••••••••"
+              autoComplete="new-password"
               {...register("confirmPassword")}
             />
             {errors.confirmPassword && (

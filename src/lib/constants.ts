@@ -77,6 +77,13 @@ export const PAYMENT_STATUS = {
   REFUNDED: "refunded",
 } as const;
 
+export const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  pending: "Pending",
+  completed: "Completed",
+  failed: "Failed",
+  refunded: "Refunded",
+};
+
 export const PAYMENT_METHODS = {
   CASH: "cash",
   UPI: "upi",

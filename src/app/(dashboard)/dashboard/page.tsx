@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
@@ -30,7 +31,7 @@ const CHART_COLORS = ["#14b8a6", "#2dd4bf", "#5eead4", "#99f6e4", "#ccfbf1"];
 
 export default function DashboardPage() {
   const { staff, branch } = useAuth();
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ["dashboard-stats", branch?.id],
@@ -72,25 +73,34 @@ export default function DashboardPage() {
     queryKey: ["weekly-revenue", branch?.id],
     queryFn: async () => {
       if (!branch) return [];
-      const days = [];
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const dayStr = date.toISOString().split("T")[0];
-        const { data } = await supabase
-          .from("orders")
-          .select("total")
-          .eq("branch_id", branch.id)
-          .in("status", ["served"])
-          .gte("created_at", `${dayStr}T00:00:00`)
-          .lt("created_at", `${dayStr}T23:59:59`);
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 6);
+      const startStr = startDate.toISOString().split("T")[0];
 
-        days.push({
-          day: date.toLocaleDateString("en-IN", { weekday: "short" }),
-          revenue: (data || []).reduce((s, o) => s + (o.total || 0), 0),
-        });
+      const { data } = await supabase
+        .from("orders")
+        .select("total, created_at")
+        .eq("branch_id", branch.id)
+        .in("status", ["served"])
+        .gte("created_at", `${startStr}T00:00:00`);
+
+      // Group by day client-side
+      const dayMap: Record<string, number> = {};
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        dayMap[d.toISOString().split("T")[0]] = 0;
       }
-      return days;
+      (data || []).forEach((o) => {
+        const day = new Date(o.created_at).toISOString().split("T")[0];
+        if (dayMap[day] !== undefined) dayMap[day] += o.total || 0;
+      });
+
+      return Object.entries(dayMap).map(([dateStr, revenue]) => ({
+        day: new Date(dateStr).toLocaleDateString("en-IN", { weekday: "short" }),
+        revenue,
+      }));
     },
     enabled: !!branch,
   });

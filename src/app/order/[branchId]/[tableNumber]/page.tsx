@@ -29,7 +29,7 @@ export default function CustomerOrderPage() {
   const params = useParams();
   const branchId = params.branchId as string;
   const tableNumber = Number(params.tableNumber);
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   const { items, addItem, removeItem, updateQuantity, getSubtotal, getItemCount, setOrderMeta } = useCartStore();
   const [dishes, setDishes] = useState<Dish[]>([]);

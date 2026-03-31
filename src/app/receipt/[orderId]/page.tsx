@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, formatDate } from "@/lib/helpers";
-import { PAYMENT_STATUS, ORDER_STATUS_LABELS } from "@/lib/constants";
+import { PAYMENT_STATUS_LABELS, ORDER_STATUS_LABELS } from "@/lib/constants";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ type OrderData = {
   total: number;
   notes: string | null;
   created_at: string;
+  branch_id: string;
   items: { dish_name: string; quantity: number; price_at_order: number }[];
   payment: { status: string; method: string } | null;
   branch: { name: string; org_name: string };
@@ -32,7 +33,7 @@ type OrderData = {
 export default function ReceiptPage() {
   const params = useParams();
   const orderId = params.orderId as string;
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   const [order, setOrder] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,6 +83,7 @@ export default function ReceiptPage() {
         total: Number(o.total),
         notes: o.notes,
         created_at: o.created_at,
+        branch_id: o.branch_id,
         items: items || [],
         payment: payment || null,
         branch: {
@@ -99,7 +101,7 @@ export default function ReceiptPage() {
     setSendingFeedback(true);
     const { error } = await supabase.from("feedback").insert({
       order_id: orderId,
-      branch_id: order?.id ? (await supabase.from("orders").select("branch_id").eq("id", orderId).single()).data?.branch_id : null,
+      branch_id: order?.branch_id || null,
       rating,
       comment: comment || null,
     });
@@ -145,7 +147,7 @@ export default function ReceiptPage() {
             </Badge>
             {order.payment && (
               <Badge className={`text-[10px] ${order.payment.status === "completed" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
-                {PAYMENT_STATUS[order.payment.status as keyof typeof PAYMENT_STATUS]} · {order.payment.method.toUpperCase()}
+                {PAYMENT_STATUS_LABELS[order.payment.status] || order.payment.status} · {order.payment.method.toUpperCase()}
               </Badge>
             )}
           </div>

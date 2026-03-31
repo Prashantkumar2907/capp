@@ -37,7 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     role: null,
   });
 
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   const fetchStaffData = async (userId: string) => {
     const { data: staffData } = await supabase
@@ -47,7 +47,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .eq("is_active", true)
       .single();
 
-    if (!staffData) return;
+    if (!staffData) {
+      setState((prev) => ({ ...prev, isLoading: false }));
+      return;
+    }
 
     const [{ data: orgData }, { data: branchData }] = await Promise.all([
       supabase.from("organizations").select("*").eq("id", staffData.org_id).single(),

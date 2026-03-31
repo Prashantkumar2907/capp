@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { inviteStaffSchema, type InviteStaffInput } from "@/lib/validations";
-import { ROLES } from "@/lib/constants";
+import { ROLES, ROLE_LABELS } from "@/lib/constants";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,9 +30,18 @@ const ROLE_COLORS: Record<string, string> = {
 
 export default function StaffPage() {
   const { organization, branch } = useAuth();
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  const { data: branches } = useQuery({
+    queryKey: ["branches", organization?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("branches").select("id, name").eq("org_id", organization!.id).eq("is_active", true);
+      return data || [];
+    },
+    enabled: !!organization,
+  });
 
   const { data: staff, isLoading } = useQuery({
     queryKey: ["staff", organization?.id],
@@ -49,7 +58,7 @@ export default function StaffPage() {
 
   const form = useForm({
     resolver: zodResolver(inviteStaffSchema) as any,
-    defaultValues: { full_name: "", email: "", phone: "", role: "waiter", branch_id: "" },
+    defaultValues: { full_name: "", email: "", phone: "", role: "waiter", branch_id: branch?.id || "" },
   });
 
   const inviteStaff = useMutation({
@@ -121,6 +130,19 @@ export default function StaffPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Branch</Label>
+                <Select defaultValue={branch?.id || ""} onValueChange={(v) => { if (v) form.setValue("branch_id", v); }}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Select branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches?.map((b) => (
+                      <SelectItem key={b.id} value={b.id} className="text-xs">{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <Button type="submit" className="w-full bg-teal-500 hover:bg-teal-600 text-white h-8 text-xs" disabled={inviteStaff.isPending}>
                 {inviteStaff.isPending && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
                 Add Staff
@@ -147,7 +169,7 @@ export default function StaffPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{s.full_name || "Unnamed"}</span>
                       <Badge className={`text-[9px] h-4 px-1.5 ${ROLE_COLORS[s.role] || "bg-zinc-100 text-zinc-600"}`}>
-                        {ROLES[s.role as keyof typeof ROLES] || s.role}
+                        {ROLE_LABELS[s.role] || s.role}
                       </Badge>
                     </div>
                     {s.email && (

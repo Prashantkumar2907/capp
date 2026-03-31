@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useCartStore } from "@/stores/cart-store";
@@ -22,7 +22,7 @@ export default function PaymentPage() {
   const router = useRouter();
   const branchId = params.branchId as string;
   const tableNumber = Number(params.tableNumber);
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   const { items, removeItem, updateQuantity, updateItemNotes, getSubtotal, clearCart } = useCartStore();
   const [step, setStep] = useState<"cart" | "upi">("cart");
@@ -30,9 +30,31 @@ export default function PaymentPage() {
   const [placing, setPlacing] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [upiLink, setUpiLink] = useState("");
+  const [taxPercent, setTaxPercent] = useState<number | null>(null);
+  const [taxInclusive, setTaxInclusive] = useState(true);
+
+  // Fetch org tax settings on mount
+  useEffect(() => {
+    async function fetchTaxSettings() {
+      const { data: branch } = await supabase
+        .from("branches")
+        .select("organizations(default_tax_percent, tax_inclusive)")
+        .eq("id", branchId)
+        .single();
+      if (branch) {
+        const org = (branch as any).organizations;
+        setTaxPercent(org?.default_tax_percent ?? 5);
+        setTaxInclusive(org?.tax_inclusive ?? true);
+      } else {
+        setTaxPercent(5);
+      }
+    }
+    fetchTaxSettings();
+  }, [branchId, supabase]);
 
   const subtotal = getSubtotal();
-  const tax = Math.round(subtotal * 0.05 * 100) / 100; // 5% default
+  const effectiveTaxPercent = taxPercent ?? 5;
+  const tax = taxInclusive ? 0 : Math.round(subtotal * (effectiveTaxPercent / 100) * 100) / 100;
   const total = subtotal + tax;
 
   const placeOrder = async () => {
@@ -242,7 +264,7 @@ export default function PaymentPage() {
                 <span>{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-zinc-500">Tax (5%)</span>
+                <span className="text-zinc-500">Tax ({taxInclusive ? "Inclusive" : `${effectiveTaxPercent}%`})</span>
                 <span>{formatCurrency(tax)}</span>
               </div>
               <Separator />

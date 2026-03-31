@@ -16,7 +16,7 @@ import { Loader2, UtensilsCrossed } from "lucide-react";
 export default function OnboardingPage() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   const {
     register,
@@ -39,8 +39,22 @@ export default function OnboardingPage() {
       return;
     }
 
-    // Create organization
-    const slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    // Check if user already has a staff record (idempotency guard)
+    const { data: existingStaff } = await supabase
+      .from("staff")
+      .select("id")
+      .eq("user_id", user.id)
+      .limit(1)
+      .single();
+
+    if (existingStaff) {
+      router.push("/dashboard");
+      return;
+    }
+
+    // Create organization with a unique slug
+    const baseSlug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 8)}`;
     const { data: org, error: orgError } = await supabase
       .from("organizations")
       .insert({

@@ -19,7 +19,7 @@ type OrderWithItems = Record<string, any> & {
 export function useRealtimeOrders(branchId: string | undefined) {
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   const fetchOrders = useCallback(async () => {
     if (!branchId) return;

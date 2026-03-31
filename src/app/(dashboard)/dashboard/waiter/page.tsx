@@ -19,7 +19,7 @@ type CartItem = { dish_id: string; dish_name: string; price: number; quantity: n
 
 export default function WaiterPage() {
   const { branch, staff } = useAuth();
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
   const queryClient = useQueryClient();
   const { orders } = useRealtimeOrders(branch?.id);
   const [selectedTable, setSelectedTable] = useState<number | null>(null);

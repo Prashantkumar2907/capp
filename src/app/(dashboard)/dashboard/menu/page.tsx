@@ -23,8 +23,8 @@ import { Plus, Pencil, Trash2, Loader2, Leaf } from "lucide-react";
 import type { Category } from "@/lib/supabase/types";
 
 export default function MenuPage() {
-  const { organization } = useAuth();
-  const supabase = createClient();
+  const { organization, branch } = useAuth();
+  const [supabase] = useState(() => createClient());
   const queryClient = useQueryClient();
   const [catDialogOpen, setCatDialogOpen] = useState(false);
   const [dishDialogOpen, setDishDialogOpen] = useState(false);
@@ -106,8 +106,12 @@ export default function MenuPage() {
         const { error } = await supabase.from("dishes").update(data).eq("id", editingDish.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("dishes").insert({ ...data, org_id: organization!.id });
+        const { data: newDish, error } = await supabase.from("dishes").insert({ ...data, org_id: organization!.id }).select("id").single();
         if (error) throw error;
+        // Auto-add dish to current branch
+        if (newDish && branch) {
+          await supabase.from("branch_dishes").insert({ branch_id: branch.id, dish_id: newDish.id });
+        }
       }
     },
     onSuccess: () => {

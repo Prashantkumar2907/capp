@@ -53,6 +53,12 @@ export function Sidebar() {
   const { staff, organization, signOut, role } = useAuth();
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
 
+  const handleSignOut = () => {
+    if (window.confirm("Are you sure you want to sign out?")) {
+      signOut();
+    }
+  };
+
   const filteredItems = navItems.filter((item) => role && item.roles.includes(role));
 
   return (
@@ -130,26 +136,26 @@ export function Sidebar() {
           {sidebarCollapsed ? (
             <Tooltip>
               <TooltipTrigger>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={signOut}>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={handleSignOut}>
                   <Avatar className="h-6 w-6">
                     <AvatarFallback className="text-[9px] bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300">
-                      {staff ? getInitials(staff.name) : "?"}
+                      {staff ? getInitials(staff.full_name) : "?"}
                     </AvatarFallback>
                   </Avatar>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="right" className="text-xs">{staff?.name} · Sign Out</TooltipContent>
+              <TooltipContent side="right" className="text-xs">{staff?.full_name} · Sign Out</TooltipContent>
             </Tooltip>
           ) : (
             <>
               <div className="flex items-center gap-2 mb-1.5">
                 <Avatar className="h-6 w-6">
                   <AvatarFallback className="text-[9px] bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300">
-                    {staff ? getInitials(staff.name) : "?"}
+                    {staff ? getInitials(staff.full_name) : "?"}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-medium truncate">{staff?.name}</p>
+                  <p className="text-[11px] font-medium truncate">{staff?.full_name}</p>
                   <p className="text-[9px] text-zinc-400">{role}</p>
                 </div>
               </div>
@@ -157,7 +163,7 @@ export function Sidebar() {
                 variant="ghost"
                 size="sm"
                 className="w-full justify-start text-[11px] h-7 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                onClick={signOut}
+                onClick={handleSignOut}
               >
                 <LogOut className="h-3 w-3 mr-1.5" />
                 Sign Out

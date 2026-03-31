@@ -1,8 +1,10 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useTheme } from "next-themes";
+import { createClient } from "@/lib/supabase/client";
 import {
   UtensilsCrossed,
   QrCode,
@@ -44,6 +46,14 @@ const plans = [
 
 export default function HomePage() {
   const { theme, setTheme } = useTheme();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [supabase] = useState(() => createClient());
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setIsLoggedIn(!!user);
+    });
+  }, [supabase]);
 
   return (
     <div className="flex flex-col w-full bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
@@ -67,12 +77,20 @@ export default function HomePage() {
               <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-transform dark:rotate-0 dark:scale-100" />
               <span className="sr-only">Toggle theme</span>
             </Button>
-            <Link href="/sign-in">
-              <Button variant="ghost" size="sm" className="text-xs lg:text-sm h-8">Sign In</Button>
-            </Link>
-            <Link href="/sign-up">
-              <Button size="sm" className="bg-teal-500 hover:bg-teal-600 text-white text-xs lg:text-sm h-8">Get Started</Button>
-            </Link>
+            {isLoggedIn ? (
+              <Link href="/dashboard">
+                <Button size="sm" className="bg-teal-500 hover:bg-teal-600 text-white text-xs lg:text-sm h-8">Dashboard</Button>
+              </Link>
+            ) : (
+              <>
+                <Link href="/sign-in">
+                  <Button variant="ghost" size="sm" className="text-xs lg:text-sm h-8">Sign In</Button>
+                </Link>
+                <Link href="/sign-up">
+                  <Button size="sm" className="bg-teal-500 hover:bg-teal-600 text-white text-xs lg:text-sm h-8">Get Started</Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </nav>

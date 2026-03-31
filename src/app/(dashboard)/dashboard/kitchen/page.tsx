@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { ITEM_STATUS } from "@/lib/constants";
+import { ITEM_STATUS, ITEM_STATUS_LABELS } from "@/lib/constants";
 import { timeAgo } from "@/lib/helpers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +25,7 @@ const ITEM_COLORS: Record<string, string> = {
 export default function KitchenPage() {
   const { branch } = useAuth();
   const { orders, isLoading } = useRealtimeOrders(branch?.id);
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
   const queryClient = useQueryClient();
   const prevOrderCount = useRef(0);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -123,7 +123,7 @@ export default function KitchenPage() {
                         </div>
                         <div className="flex items-center gap-1.5">
                           <Badge className="text-[8px] h-3.5 bg-transparent border border-zinc-700 text-zinc-400">
-                            {ITEM_STATUS[item.status as keyof typeof ITEM_STATUS] || item.status}
+                            {ITEM_STATUS_LABELS[item.status as keyof typeof ITEM_STATUS_LABELS] || item.status}
                           </Badge>
                           {next && (
                             <Button

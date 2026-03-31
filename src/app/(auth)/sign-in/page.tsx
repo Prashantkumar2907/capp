@@ -27,7 +27,7 @@ function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   const {
     register,
@@ -72,6 +72,7 @@ function SignInForm() {
               id="email"
               type="email"
               placeholder="you@restaurant.com"
+              autoComplete="email"
               {...register("email")}
             />
             {errors.email && (
@@ -92,6 +93,7 @@ function SignInForm() {
               id="password"
               type="password"
               placeholder="••••••••"
+              autoComplete="current-password"
               {...register("password")}
             />
             {errors.password && (

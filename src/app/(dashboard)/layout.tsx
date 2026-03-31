@@ -3,7 +3,8 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Loader2 } from "lucide-react";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function DashboardLayout({
   children,
@@ -11,21 +12,23 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const { isLoading, user, staff } = useAuth();
+  const router = useRouter();
 
-  if (isLoading) {
+  useEffect(() => {
+    if (isLoading) return;
+    if (!user) {
+      router.replace("/sign-in");
+    } else if (!staff) {
+      router.replace("/onboarding");
+    }
+  }, [isLoading, user, staff, router]);
+
+  if (isLoading || !user || !staff) {
     return (
       <div className="h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
         <Loader2 className="h-6 w-6 animate-spin text-teal-500" />
       </div>
     );
-  }
-
-  if (!user) {
-    redirect("/sign-in");
-  }
-
-  if (!staff) {
-    redirect("/onboarding");
   }
 
   return (
