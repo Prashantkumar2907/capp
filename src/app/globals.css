@@ -126,5 +126,88 @@
   }
   html {
     @apply font-sans;
+    scroll-behavior: smooth;
   }
+}
+
+/* ===== Global Transitions & Animations ===== */
+
+/* Smooth transitions on all interactive elements */
+button, a, input, select, textarea, [role="button"] {
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Subtle hover lift for cards */
+.card-hover {
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+.card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.08);
+}
+
+/* Focus ring - teal themed */
+*:focus-visible {
+  outline: 2px solid #14b8a6;
+  outline-offset: 2px;
+}
+
+/* Smooth scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #a1a1aa;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #14b8a6;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #14b8a6;
+}
+
+/* Hide scrollbar but keep scrolling */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Page enter animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-page-enter {
+  animation: fadeIn 300ms ease-out;
+}
+
+/* Pulse glow for active status */
+@keyframes pulse-teal {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.3); }
+  50% { box-shadow: 0 0 0 6px rgba(20, 184, 166, 0); }
+}
+.animate-pulse-teal {
+  animation: pulse-teal 2s ease-in-out infinite;
+}
+
+/* Responsive text sizing utility */
+@media (max-width: 640px) {
+  .text-responsive-sm { font-size: 0.75rem; }
+  .text-responsive-base { font-size: 0.8125rem; }
+}
+
+/* Dark mode card hover */
+.dark .card-hover:hover {
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.12);
 }
