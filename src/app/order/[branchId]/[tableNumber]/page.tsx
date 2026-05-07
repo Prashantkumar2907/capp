@@ -1,287 +1,181 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useParams } from "next/navigation";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
-import { useCartStore } from "@/stores/cart-store";
-import { formatCurrency } from "@/lib/helpers";
+import { ArrowRight, Search, ShoppingBag, Table2, UtensilsCrossed } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Search, ShoppingCart, Plus, Minus, UtensilsCrossed, Leaf, Star,
-} from "lucide-react";
-import Link from "next/link";
+import { DishTile } from "@/components/features/menu/dish-tile";
+import { CartPanel } from "@/components/features/cart/cart-panel";
+import { calculateTotals } from "@/lib/utils";
+import { useCartStore } from "@/stores/cart-store";
+import type { Category, DishWithRelations, RestaurantTable } from "@/types/database";
 
-export default function CustomerOrderPage() {
-  const params = useParams();
-  const branchId = params.branchId as string;
-  const tableNumber = Number(params.tableNumber);
-  const [supabase] = useState(() => createClient());
+interface PublicMenu {
+  branch: {
+    id: string;
+    name: string;
+    address: string | null;
+    city: string | null;
+    organizations: { name: string; default_tax_percent: number; tax_inclusive: boolean } | null;
+  };
+  table: RestaurantTable | null;
+  categories: Category[];
+  dishes: DishWithRelations[];
+}
+
+export default function PublicOrderPage() {
+  const params = useParams<{ branchId: string; tableNumber: string }>();
+  const router = useRouter();
+  const branchId = safeParam(params.branchId);
+  const tableNumber = Number(safeParam(params.tableNumber));
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [vegOnly, setVegOnly] = useState(false);
+  const [categoryId, setCategoryId] = useState("all");
+  const cart = useCartStore();
 
-  const { items, addItem, removeItem, updateQuantity, getItemCount, getSubtotal } = useCartStore();
-  const cartCount = getItemCount();
+  useEffect(() => {
+    if (branchId && tableNumber) cart.setContext(branchId, tableNumber);
+  }, [branchId, cart, tableNumber]);
 
-  // Fetch branch + org info
-  const { data: branchInfo } = useQuery({
-    queryKey: ["branch-info", branchId],
+  const menu = useQuery({
+    queryKey: ["public-menu", branchId, tableNumber],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("branches")
-        .select("*, organizations(name, logo_url, accent_color)")
-        .eq("id", branchId)
-        .single();
-      return data;
+      const response = await fetch(`/api/public/menu?branchId=${branchId}&tableNumber=${tableNumber}`);
+      const payload = (await response.json()) as PublicMenu & { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Unable to load menu");
+      return payload;
     },
+    enabled: !!branchId && !!tableNumber,
   });
 
-  // Fetch menu
-  const { data: categories } = useQuery({
-    queryKey: ["public-categories", branchId],
-    queryFn: async () => {
-      const orgId = branchInfo?.org_id;
-      if (!orgId) return [];
-      const { data } = await supabase
-        .from("categories")
-        .select("*")
-        .eq("org_id", orgId)
-        .eq("is_active", true)
-        .order("sort_order");
-      return data || [];
-    },
-    enabled: !!branchInfo?.org_id,
-  });
-
-  const { data: dishes, isLoading } = useQuery({
-    queryKey: ["public-dishes", branchId],
-    queryFn: async () => {
-      const orgId = branchInfo?.org_id;
-      if (!orgId) return [];
-      const { data } = await supabase
-        .from("dishes")
-        .select("*, categories(name), branch_dishes!inner(is_available, custom_price)")
-        .eq("org_id", orgId)
-        .eq("is_active", true)
-        .eq("branch_dishes.branch_id", branchId)
-        .eq("branch_dishes.is_available", true)
-        .order("sort_order");
-      return data || [];
-    },
-    enabled: !!branchInfo?.org_id,
-  });
-
-  const orgName = (branchInfo as any)?.organizations?.name || "Restaurant";
-
-  const filteredDishes = useMemo(() => {
-    return (dishes || []).filter((d: any) => {
-      if (search && !d.name.toLowerCase().includes(search.toLowerCase())) return false;
-      if (selectedCategory !== "all" && d.category_id !== selectedCategory) return false;
-      if (vegOnly && !d.is_veg) return false;
+  const dishes = useMemo(() => {
+    return (menu.data?.dishes ?? []).filter((dish) => {
+      if (search && !dish.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (categoryId !== "all" && dish.category_id !== categoryId) return false;
       return true;
     });
-  }, [dishes, search, selectedCategory, vegOnly]);
+  }, [categoryId, menu.data?.dishes, search]);
 
-  const getItemQty = (dishId: string) => items.find(i => i.dish_id === dishId)?.quantity || 0;
-  const getDishPrice = (dish: any) => {
-    const override = dish.branch_dishes?.[0]?.custom_price;
-    return override ? Number(override) : Number(dish.price);
+  const subtotal = cart.subtotal();
+  const totals = calculateTotals(subtotal, Number(menu.data?.branch.organizations?.default_tax_percent ?? 5), Boolean(menu.data?.branch.organizations?.tax_inclusive ?? true));
+
+  const addDish = (dish: DishWithRelations) => {
+    cart.addItem({
+      dish_id: dish.id,
+      dish_name: dish.name,
+      unit_price: Number(dish.price),
+      image_url: dish.image_url,
+      is_veg: dish.is_veg,
+    });
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <div className="sticky top-0 z-20 bg-card/95 backdrop-blur-md border-b border-border">
-        <div className="max-w-lg mx-auto px-4 py-3">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h1 className="text-base font-bold">{orgName}</h1>
-              <p className="text-[10px] text-muted-foreground">Table {tableNumber} · {branchInfo?.name}</p>
-            </div>
-            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <UtensilsCrossed className="h-5 w-5 text-primary" />
+    <main className="min-h-screen bg-background">
+      <header className="sticky top-0 z-40 border-b bg-background/90 px-4 py-3 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
+                <UtensilsCrossed className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{menu.data?.branch.organizations?.name ?? "CAPP"}</p>
+                <p className="truncate text-xs text-muted-foreground">{menu.data?.branch.name ?? "Loading menu"}</p>
+              </div>
             </div>
           </div>
-
-          {/* Search */}
-          <div className="relative mb-3">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              className="h-9 pl-9 text-xs rounded-xl bg-muted/50"
-              placeholder="Search dishes..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
-
-          {/* Category + veg toggle */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setVegOnly(!vegOnly)}
-              className={`px-3 py-1.5 rounded-full text-[10px] font-medium flex items-center gap-1 transition-colors shrink-0 ${
-                vegOnly ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-muted text-muted-foreground"
-              }`}
-            >
-              <Leaf className="h-3 w-3" /> Veg Only
+          <Badge variant="secondary">
+            <Table2 className="h-3 w-3" />
+            Table {tableNumber}
+          </Badge>
+        </div>
+      </header>
+      <div className="mx-auto grid max-w-6xl gap-4 px-4 py-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="space-y-4">
+          <Card>
+            <CardContent className="space-y-3 p-4">
+              <div>
+                <h1 className="text-xl font-semibold">Order at your table</h1>
+                <p className="mt-1 text-sm text-muted-foreground">Choose dishes, add item notes, and send the order straight to the kitchen queue.</p>
+              </div>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input className="pl-9" placeholder="Search the menu" value={search} onChange={(event) => setSearch(event.target.value)} />
+              </div>
+            </CardContent>
+          </Card>
+          <div className="hide-scrollbar flex gap-2 overflow-x-auto pb-1">
+            <button className={`rounded-full px-3 py-2 text-xs font-medium ${categoryId === "all" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground"}`} onClick={() => setCategoryId("all")}>
+              All
             </button>
-            <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
-              <button
-                onClick={() => setSelectedCategory("all")}
-                className={`px-3 py-1.5 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors ${
-                  selectedCategory === "all" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                }`}
-              >
-                All
+            {menu.data?.categories.map((category) => (
+              <button key={category.id} className={`rounded-full px-3 py-2 text-xs font-medium ${categoryId === category.id ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground"}`} onClick={() => setCategoryId(category.id)}>
+                {category.name}
               </button>
-              {categories?.map(cat => (
-                <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-3 py-1.5 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors ${
-                    selectedCategory === cat.id ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {cat.name}
-                </button>
+            ))}
+          </div>
+          {menu.isLoading ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              {Array.from({ length: 8 }).map((_, index) => (
+                <Skeleton key={index} className="h-32" />
               ))}
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Menu Items */}
-      <div className="flex-1 px-4 py-4 max-w-lg mx-auto w-full">
-        {isLoading ? (
-          <div className="space-y-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
-        ) : filteredDishes.length === 0 ? (
-          <div className="text-center py-20">
-            <UtensilsCrossed className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">No dishes found</p>
-            {search && <Button variant="link" size="sm" onClick={() => setSearch("")} className="text-primary text-xs mt-1">Clear search</Button>}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {filteredDishes.map((dish: any, i: number) => {
-              const qty = getItemQty(dish.id);
-              const price = getDishPrice(dish);
-              return (
-                <motion.div
+          ) : menu.error ? (
+            <Card>
+              <CardContent className="p-8 text-sm text-destructive">{menu.error.message}</CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {dishes.map((dish) => (
+                <DishTile
                   key={dish.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.03 }}
-                >
-                  <Card className="overflow-hidden card-hover">
-                    <CardContent className="p-0 flex">
-                      {/* Image or placeholder */}
-                      <div className="w-24 h-24 bg-muted flex items-center justify-center shrink-0">
-                        {dish.image_url ? (
-                          <img src={dish.image_url} alt={dish.name} className="h-full w-full object-cover" />
-                        ) : (
-                          <UtensilsCrossed className="h-6 w-6 text-muted-foreground" />
-                        )}
-                      </div>
-                      <div className="flex-1 p-3 flex flex-col justify-between min-w-0">
-                        <div>
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            {dish.is_veg ? (
-                              <span className="h-3.5 w-3.5 rounded-sm border border-green-500 flex items-center justify-center shrink-0"><span className="h-1.5 w-1.5 rounded-full bg-green-500" /></span>
-                            ) : (
-                              <span className="h-3.5 w-3.5 rounded-sm border border-red-500 flex items-center justify-center shrink-0"><span className="h-1.5 w-1.5 rounded-full bg-red-500" /></span>
-                            )}
-                            <span className="text-sm font-medium truncate">{dish.name}</span>
-                          </div>
-                          {dish.description && (
-                            <p className="text-[10px] text-muted-foreground line-clamp-2 mt-0.5">{dish.description}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-sm font-bold text-primary">{formatCurrency(price)}</span>
-                          {qty > 0 ? (
-                            <div className="flex items-center gap-1.5">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 w-7 p-0 rounded-lg"
-                                onClick={() => qty <= 1 ? removeItem(dish.id) : updateQuantity(dish.id, qty - 1)}
-                              >
-                                <Minus className="h-3 w-3" />
-                              </Button>
-                              <motion.span
-                                key={qty}
-                                initial={{ scale: 1.3 }}
-                                animate={{ scale: 1 }}
-                                className="w-5 text-center text-xs font-bold"
-                              >
-                                {qty}
-                              </motion.span>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 w-7 p-0 rounded-lg"
-                                onClick={() => updateQuantity(dish.id, qty + 1)}
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button
-                              size="sm"
-                              className="h-7 text-[10px] px-3 rounded-lg"
-                              onClick={() => addItem({
-                                dish_id: dish.id, dish_name: dish.name,
-                                unit_price: price, is_veg: dish.is_veg,
-                                dish_image_url: dish.image_url,
-                              })}
-                            >
-                              <Plus className="h-3 w-3 mr-0.5" /> Add
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Cart footer */}
-      <AnimatePresence>
-        {cartCount > 0 && (
-          <motion.div
-            initial={{ y: 80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 80, opacity: 0 }}
-            className="sticky bottom-0 z-20"
-          >
-            <div className="max-w-lg mx-auto px-4 pb-4">
-              <Link href={`/order/${branchId}/${tableNumber}/payment`}>
-                <Button className="w-full h-12 rounded-xl text-sm font-medium shadow-lg shadow-primary/25 flex items-center justify-between px-5">
-                  <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded-md bg-white/20 flex items-center justify-center">
-                      <ShoppingCart className="h-3.5 w-3.5" />
-                    </div>
-                    <span>{cartCount} item{cartCount > 1 ? "s" : ""}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span>{formatCurrency(getSubtotal())}</span>
-                    <span className="text-xs opacity-75">→</span>
-                  </div>
-                </Button>
-              </Link>
+                  dish={dish}
+                  quantity={cart.items.find((item) => item.dish_id === dish.id)?.quantity ?? 0}
+                  onAdd={() => addDish(dish)}
+                  onRemove={() => cart.updateQuantity(dish.id, (cart.items.find((item) => item.dish_id === dish.id)?.quantity ?? 1) - 1)}
+                />
+              ))}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+          )}
+        </section>
+        <aside className="hidden xl:block">
+          <CartPanel
+            items={cart.items}
+            subtotal={subtotal}
+            tax={totals.tax}
+            total={totals.total}
+            submitLabel="Review order"
+            onIncrement={(dishId) => {
+              const dish = menu.data?.dishes.find((item) => item.id === dishId);
+              if (dish) addDish(dish);
+            }}
+            onDecrement={(dishId) => cart.updateQuantity(dishId, (cart.items.find((item) => item.dish_id === dishId)?.quantity ?? 1) - 1)}
+            onRemove={cart.removeItem}
+            onNotes={cart.updateNotes}
+            onSubmit={() => router.push(`/order/${branchId}/${tableNumber}/payment`)}
+          />
+        </aside>
+      </div>
+      {cart.items.length ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-card p-3 shadow-sm xl:hidden">
+          <Link href={`/order/${branchId}/${tableNumber}/payment`}>
+            <Button className="w-full">
+              <ShoppingBag className="h-4 w-4" />
+              Review {cart.count()} items
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+      ) : null}
+    </main>
   );
+}
+
+function safeParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value ?? "";
 }

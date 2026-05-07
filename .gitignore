@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/playwright-report
+/test-results
 
 # next.js
 /.next/
@@ -42,3 +44,6 @@ next-env.d.ts
 
 # graphify 
 /graphify-out
+
+# local Codex skills and scratch work
+/skills

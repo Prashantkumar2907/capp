@@ -1,187 +1,137 @@
 "use client";
 
-import { useAuth } from "@/hooks/use-auth";
-import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
-import { formatCurrency, timeAgo } from "@/lib/helpers";
-import { ORDER_STATUS_LABELS, ITEM_STATUS_LABELS } from "@/lib/constants";
-import { SectionHeader } from "@/components/common/section-header";
-import { EmptyState } from "@/components/common/empty-state";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, Clock3, RefreshCw, Search, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
-import { Clock, ChevronRight, ShoppingCart, Volume2, VolumeX } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/shared/page-header";
+import { StatCard } from "@/components/shared/stat-card";
+import { EmptyState } from "@/components/shared/empty-state";
+import { OrderCard } from "@/components/features/orders/order-card";
+import { orderStatuses, orderStatusLabels, type OrderStatus } from "@/lib/constants";
+import { formatCurrency } from "@/lib/utils";
+import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
+import { useAuth } from "@/features/auth/auth-provider";
 
-const KANBAN_COLUMNS = [
-  { status: "pending", label: "Pending", color: "border-amber-400", bg: "bg-amber-400" },
-  { status: "confirmed", label: "Confirmed", color: "border-blue-400", bg: "bg-blue-400" },
-  { status: "preparing", label: "Preparing", color: "border-orange-400", bg: "bg-orange-400" },
-  { status: "ready", label: "Ready", color: "border-green-400", bg: "bg-green-400" },
-  { status: "served", label: "Served", color: "border-muted-foreground", bg: "bg-muted-foreground" },
-];
-
-function getTimeColor(createdAt: string) {
-  const mins = (Date.now() - new Date(createdAt).getTime()) / 60000;
-  if (mins < 10) return "text-green-600 dark:text-green-400";
-  if (mins < 20) return "text-amber-600 dark:text-amber-400";
-  return "text-red-600 dark:text-red-400";
-}
+type SourceFilter = "all" | "waiter" | "qr_customer" | "cashier";
 
 export default function OrdersPage() {
   const { branch } = useAuth();
-  const { orders, isLoading, refetch } = useRealtimeOrders(branch?.id);
-  const supabase = createClient();
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const prevCount = useRef(0);
+  const queryClient = useQueryClient();
+  const { orders, loading, error, refresh } = useRealtimeOrders(branch?.id);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<OrderStatus | "all">("all");
+  const [source, setSource] = useState<SourceFilter>("all");
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (orders && orders.length > prevCount.current && prevCount.current > 0 && soundEnabled) {
-      try {
-        const ctx = new AudioContext();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.frequency.value = 800; gain.gain.value = 0.3;
-        osc.start(); osc.stop(ctx.currentTime + 0.2);
-      } catch {}
+  const filtered = useMemo(() => {
+    return orders.filter((order) => {
+      const haystack = `${order.order_number} ${order.customer_name ?? ""} ${order.table_number ?? ""}`.toLowerCase();
+      if (search && !haystack.includes(search.toLowerCase())) return false;
+      if (status !== "all" && order.status !== status) return false;
+      if (source !== "all" && order.order_source !== source) return false;
+      return true;
+    });
+  }, [orders, search, source, status]);
+
+  const stats = useMemo(() => {
+    const active = orders.filter((order) => !["served", "cancelled"].includes(order.status));
+    return {
+      active: active.length,
+      pending: orders.filter((order) => order.status === "pending").length,
+      ready: orders.filter((order) => order.status === "ready").length,
+      revenue: orders.filter((order) => order.status !== "cancelled").reduce((sum, order) => sum + Number(order.total), 0),
+    };
+  }, [orders]);
+
+  const updateStatus = async (orderId: string, nextStatus: OrderStatus) => {
+    setBusyId(orderId);
+    try {
+      const response = await fetch(`/api/orders/${orderId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus, itemStatus: statusToItemStatus(nextStatus) }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Unable to update order");
+      await refresh();
+      await queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
+      toast.success("Order updated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to update order");
+    } finally {
+      setBusyId(null);
     }
-    prevCount.current = orders?.length || 0;
-  }, [orders?.length, soundEnabled]);
-
-  const updateStatus = useMutation({
-    mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
-      const { error } = await supabase.from("orders").update({ status }).eq("id", orderId);
-      if (error) throw error;
-    },
-    onSuccess: () => { refetch(); toast.success("Order updated"); },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  const getNextStatus = (current: string) => {
-    const flow = ["pending", "confirmed", "preparing", "ready", "served"];
-    const idx = flow.indexOf(current);
-    return idx < flow.length - 1 ? flow[idx + 1] : null;
   };
-
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-40" />
-        <div className="grid grid-cols-5 gap-3">
-          {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-[400px] rounded-xl" />)}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-5">
-      <SectionHeader
+      <PageHeader
         title="Orders"
-        description={`${orders.length} active orders`}
+        description="Track every table, QR, waiter, and cashier order in real time."
         actions={
-          <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5"
-            onClick={() => setSoundEnabled(!soundEnabled)}>
-            {soundEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-            Sound {soundEnabled ? "On" : "Off"}
+          <Button variant="secondary" onClick={() => void refresh()}>
+            <RefreshCw className="h-4 w-4" />
+            Refresh
           </Button>
         }
       />
-
-      {/* Kanban Board */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        {KANBAN_COLUMNS.map((col) => {
-          const columnOrders = orders.filter((o) => o.status === col.status);
-          return (
-            <div key={col.status} className="min-h-[200px]">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className={`h-2.5 w-2.5 rounded-full ${col.bg}`} />
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {col.label}
-                  </h3>
-                </div>
-                <Badge variant="secondary" className="text-[10px] h-5 px-1.5">{columnOrders.length}</Badge>
-              </div>
-              <ScrollArea className="h-[calc(100vh-240px)]">
-                <div className="space-y-2.5 pr-1">
-                  {columnOrders.map((order, i) => {
-                    const next = getNextStatus(order.status);
-                    return (
-                      <motion.div
-                        key={order.id}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.05 }}
-                      >
-                        <Card className={`border-l-[3px] ${col.color} overflow-hidden card-hover`}>
-                          <CardContent className="p-3 space-y-2.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold text-primary">#{order.order_number}</span>
-                              <Badge variant="outline" className="text-[9px] h-4">
-                                {ORDER_STATUS_LABELS[order.status as keyof typeof ORDER_STATUS_LABELS] || order.status}
-                              </Badge>
-                            </div>
-
-                            {order.table_number && (
-                              <p className="text-[10px] text-muted-foreground">Table {order.table_number}</p>
-                            )}
-
-                            {/* Items */}
-                            <div className="space-y-1">
-                              {order.order_items?.slice(0, 4).map((item: any) => (
-                                <div key={item.id} className="flex items-center justify-between text-[11px]">
-                                  <span className="truncate flex-1 text-muted-foreground">
-                                    <span className="font-medium text-foreground">{item.quantity}×</span> {item.dish_name}
-                                  </span>
-                                </div>
-                              ))}
-                              {(order.order_items?.length || 0) > 4 && (
-                                <p className="text-[10px] text-muted-foreground">+{order.order_items.length - 4} more</p>
-                              )}
-                            </div>
-
-                            <div className="flex items-center justify-between pt-2 border-t border-border">
-                              <div className={`flex items-center gap-1 text-[10px] font-medium ${getTimeColor(order.created_at)}`}>
-                                <Clock className="h-2.5 w-2.5" />
-                                {timeAgo(order.created_at)}
-                              </div>
-                              <span className="text-xs font-bold">{formatCurrency(Number(order.total))}</span>
-                            </div>
-
-                            {next && (
-                              <Button
-                                size="sm"
-                                className="w-full h-7 text-[10px] mt-1"
-                                onClick={() => updateStatus.mutate({ orderId: order.id, status: next })}
-                                disabled={updateStatus.isPending}
-                              >
-                                {ORDER_STATUS_LABELS[next as keyof typeof ORDER_STATUS_LABELS] || next}
-                                <ChevronRight className="h-3 w-3 ml-0.5" />
-                              </Button>
-                            )}
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    );
-                  })}
-                  {columnOrders.length === 0 && (
-                    <div className="flex items-center justify-center py-12 text-[10px] text-muted-foreground">
-                      No orders
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
-            </div>
-          );
-        })}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Active orders" value={stats.active} icon={ShoppingCart} />
+        <StatCard label="Pending confirmation" value={stats.pending} icon={AlertCircle} tone="warning" />
+        <StatCard label="Ready to serve" value={stats.ready} icon={Clock3} tone="success" />
+        <StatCard label="Order value" value={formatCurrency(stats.revenue)} icon={ShoppingCart} tone="info" />
       </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-64 flex-1 sm:max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input className="pl-9" placeholder="Search order, table, customer" value={search} onChange={(event) => setSearch(event.target.value)} />
+        </div>
+        <Select value={status} onChange={(event) => setStatus(event.target.value as OrderStatus | "all")} className="w-48">
+          <option value="all">All statuses</option>
+          {orderStatuses.map((item) => (
+            <option key={item} value={item}>
+              {orderStatusLabels[item]}
+            </option>
+          ))}
+        </Select>
+        <Select value={source} onChange={(event) => setSource(event.target.value as SourceFilter)} className="w-48">
+          <option value="all">All sources</option>
+          <option value="qr_customer">QR customer</option>
+          <option value="waiter">Waiter</option>
+          <option value="cashier">Cashier</option>
+        </Select>
+      </div>
+      {loading ? (
+        <div className="grid gap-3 xl:grid-cols-2">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} className="h-64" />
+          ))}
+        </div>
+      ) : error ? (
+        <div className="rounded-2xl border bg-card p-6 text-sm text-destructive">{error}</div>
+      ) : filtered.length ? (
+        <div className="grid gap-3 xl:grid-cols-2">
+          {filtered.map((order) => (
+            <OrderCard key={order.id} order={order} busy={busyId === order.id} onStatusChange={(nextStatus) => void updateStatus(order.id, nextStatus)} />
+          ))}
+        </div>
+      ) : (
+        <EmptyState icon={ShoppingCart} title="No orders in this view" description="Change filters or create a waiter order to start service." />
+      )}
     </div>
   );
+}
+
+function statusToItemStatus(status: OrderStatus) {
+  if (status === "confirmed") return "accepted";
+  if (status === "served") return "served";
+  if (status === "cancelled") return "cancelled";
+  if (status === "ready") return "ready";
+  if (status === "preparing") return "preparing";
+  return "pending";
 }

@@ -1,206 +1,201 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useParams } from "next/navigation";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
-import { formatCurrency } from "@/lib/helpers";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { CheckCircle2, Clock, ExternalLink, ReceiptText, Star, Table2 } from "lucide-react";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
-import { Receipt, Star, Send, Loader2, UtensilsCrossed, Share2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { OrderStatusBadge } from "@/components/shared/status-badge";
+import { createClient } from "@/lib/supabase/client";
+import { formatCurrency, formatDateTime, upiLink } from "@/lib/utils";
+import type { Branch, Order, OrderItem, Payment } from "@/types/database";
+
+type ReceiptOrder = Order & {
+  order_items: OrderItem[];
+  payments: Payment[];
+  branches: (Branch & { organizations: { name: string; default_tax_percent: number; tax_inclusive: boolean } | null }) | null;
+};
 
 export default function ReceiptPage() {
-  const params = useParams();
-  const orderId = params.orderId as string;
-  const [supabase] = useState(() => createClient());
-  const [rating, setRating] = useState(0);
+  const params = useParams<{ orderId: string }>();
+  const orderId = safeParam(params.orderId);
+  const supabase = createClient();
+  const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
-  const [feedbackSent, setFeedbackSent] = useState(false);
 
-  const { data: order, isLoading } = useQuery({
+  const receipt = useQuery({
     queryKey: ["receipt", orderId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("orders")
-        .select("*, order_items(*), branches(name, organizations(name))")
-        .eq("id", orderId)
-        .single();
-      return data;
+      const response = await fetch(`/api/public/receipt?orderId=${orderId}`);
+      const payload = (await response.json()) as { error?: string; order?: ReceiptOrder };
+      if (!response.ok || !payload.order) throw new Error(payload.error ?? "Receipt not found");
+      return payload.order;
     },
+    enabled: !!orderId,
+    refetchInterval: 15000,
   });
 
-  const sendFeedback = useMutation({
+  const feedback = useMutation({
     mutationFn: async () => {
-      if (rating < 1) { toast.error("Please select a rating"); return; }
+      const order = receipt.data;
+      if (!order) return;
       const { error } = await supabase.from("feedback").insert({
-        order_id: orderId,
-        branch_id: order?.branch_id,
+        order_id: order.id,
+        branch_id: order.branch_id,
         rating,
         comment: comment || null,
       });
       if (error) throw error;
     },
-    onSuccess: () => {
-      setFeedbackSent(true);
-      toast.success("Thank you for your feedback!");
-    },
-    onError: (err: Error) => toast.error(err.message),
+    onSuccess: () => toast.success("Thank you for the feedback"),
+    onError: (error) => toast.error(error.message),
   });
 
-  const handleShare = async () => {
-    if (navigator.share) {
-      await navigator.share({
-        title: `Receipt #${order?.order_number}`,
-        text: `Order total: ${formatCurrency(Number(order?.total))}`,
-        url: window.location.href,
-      });
-    } else {
-      navigator.clipboard.writeText(window.location.href);
-      toast.success("Link copied!");
-    }
-  };
-
-  if (isLoading || !order) {
+  if (receipt.isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
+      <main className="flex min-h-screen items-center justify-center bg-background p-4">
+        <div className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      </main>
     );
   }
 
-  const orgName = (order as any).branches?.organizations?.name || "Restaurant";
-  const branchName = (order as any).branches?.name || "";
+  if (receipt.error || !receipt.data) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background p-4">
+        <Card className="max-w-md">
+          <CardContent className="p-6 text-center">
+            <ReceiptText className="mx-auto h-10 w-10 text-muted-foreground" />
+            <h1 className="mt-3 text-lg font-semibold">Receipt not found</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{receipt.error?.message ?? "This order could not be loaded."}</p>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
+
+  const order = receipt.data;
+  const payment = order.payments[0];
+  const branch = order.branches;
+  const upiHref =
+    branch?.upi_vpa && payment
+      ? upiLink({ vpa: branch.upi_vpa, amount: Number(payment.amount), reference: order.order_number, merchant: branch.organizations?.name ?? branch.name })
+      : null;
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-sm"
-      >
-        <Card className="border-border shadow-xl overflow-hidden">
-          {/* Header */}
-          <div className="bg-primary/5 p-5 text-center border-b border-border">
-            <div className="mx-auto h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
-              <UtensilsCrossed className="h-6 w-6 text-primary" />
-            </div>
-            <h1 className="text-lg font-bold">{orgName}</h1>
-            <p className="text-xs text-muted-foreground">{branchName}</p>
-          </div>
-
-          <CardContent className="p-5 space-y-4">
-            {/* Order info */}
-            <div className="flex items-center justify-between">
+    <main className="min-h-screen bg-background px-4 py-5">
+      <div className="mx-auto max-w-2xl space-y-4">
+        <Card>
+          <CardContent className="space-y-4 p-5">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs text-muted-foreground">Order Number</p>
-                <p className="text-sm font-bold text-primary">#{order.order_number}</p>
+                <p className="text-xs text-muted-foreground">{branch?.organizations?.name ?? "CAPP"}</p>
+                <h1 className="font-numbers mt-1 text-xl font-semibold">#{order.order_number}</h1>
+                <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(order.created_at)}</p>
               </div>
-              <div className="text-right">
-                <p className="text-xs text-muted-foreground">Date</p>
-                <p className="text-xs font-medium">
-                  {new Date(order.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                </p>
-              </div>
+              <OrderStatusBadge status={order.status} />
             </div>
-
-            {order.table_number && (
-              <Badge variant="outline" className="text-xs">Table {order.table_number}</Badge>
-            )}
-
-            <Separator />
-
-            {/* Items */}
-            <div className="space-y-2">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Items</h3>
-              {order.order_items?.map((item: any) => (
-                <div key={item.id} className="flex justify-between text-sm">
-                  <span className="flex-1">
-                    <span className="font-medium">{item.quantity}×</span>{" "}
-                    {item.dish_name}
-                  </span>
-                  <span className="font-medium shrink-0 ml-3">{formatCurrency(item.quantity * Number(item.price_at_order))}</span>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <MiniStat icon={Table2} label="Table" value={order.table_number ? String(order.table_number) : "Takeaway"} />
+              <MiniStat icon={Clock} label="Status" value={order.status} />
+              <MiniStat icon={CheckCircle2} label="Payment" value={payment?.status ?? "pending"} />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="space-y-3 p-5">
+            <h2 className="text-sm font-semibold">Items</h2>
+            {order.order_items.map((item) => (
+              <div key={item.id} className="flex items-start justify-between gap-3 rounded-2xl bg-secondary p-3">
+                <div>
+                  <p className="text-sm font-medium">{item.dish_name}</p>
+                  {item.notes ? <p className="mt-1 text-xs text-muted-foreground">{item.notes}</p> : null}
                 </div>
+                <div className="text-right">
+                  <p className="font-numbers text-sm font-semibold">{formatCurrency(Number(item.price_at_order) * item.quantity)}</p>
+                  <p className="font-numbers text-xs text-muted-foreground">x{item.quantity}</p>
+                </div>
+              </div>
+            ))}
+            <div className="space-y-2 border-t pt-3 text-sm">
+              <Line label="Subtotal" value={formatCurrency(order.subtotal)} />
+              <Line label="Tax" value={formatCurrency(order.tax)} />
+              <Line label="Discount" value={formatCurrency(order.discount)} />
+              <Line label="Total" value={formatCurrency(order.total)} strong />
+            </div>
+          </CardContent>
+        </Card>
+        {payment?.status !== "completed" && upiHref ? (
+          <Card>
+            <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold">Payment pending</h2>
+                <p className="text-xs text-muted-foreground">Use UPI now or pay at the cashier desk.</p>
+              </div>
+              <a href={upiHref}>
+                <Button>
+                  <ExternalLink className="h-4 w-4" />
+                  Pay UPI
+                </Button>
+              </a>
+            </CardContent>
+          </Card>
+        ) : null}
+        <Card>
+          <CardContent className="space-y-4 p-5">
+            <div>
+              <h2 className="text-sm font-semibold">How was the experience?</h2>
+              <p className="text-xs text-muted-foreground">Your feedback helps the restaurant improve service.</p>
+            </div>
+            <div className="flex gap-2">
+              {[1, 2, 3, 4, 5].map((value) => (
+                <button key={value} className={`flex h-10 w-10 items-center justify-center rounded-full border ${rating >= value ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground"}`} onClick={() => setRating(value)} aria-label={`${value} stars`}>
+                  <Star className="h-4 w-4" />
+                </button>
               ))}
             </div>
-
-            <Separator />
-
-            {/* Totals */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatCurrency(Number(order.subtotal))}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Tax</span>
-                <span>{formatCurrency(Number(order.tax))}</span>
-              </div>
-              {Number(order.discount) > 0 && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Discount</span>
-                  <span className="text-green-600">-{formatCurrency(Number(order.discount))}</span>
-                </div>
-              )}
-              <Separator />
-              <div className="flex justify-between text-base font-bold">
-                <span>Total</span>
-                <span className="text-primary">{formatCurrency(Number(order.total))}</span>
-              </div>
-            </div>
-
-            {/* Status */}
-            <div className="flex justify-center">
-              <Badge className="text-xs capitalize">{order.status}</Badge>
-            </div>
-
-            <Separator />
-
-            {/* Feedback */}
-            {!feedbackSent ? (
-              <div className="space-y-3">
-                <h3 className="text-xs font-semibold text-center">How was your experience?</h3>
-                <div className="flex justify-center gap-1.5">
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <button key={s} onClick={() => setRating(s)} className="p-1 transition-transform hover:scale-110">
-                      <Star
-                        className={`h-7 w-7 transition-colors ${s <= rating ? "fill-amber-400 text-amber-400" : "text-muted"}`}
-                      />
-                    </button>
-                  ))}
-                </div>
-                {rating > 0 && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-2">
-                    <Textarea
-                      className="text-xs min-h-[60px] rounded-xl"
-                      placeholder="Tell us more (optional)..."
-                      value={comment}
-                      onChange={e => setComment(e.target.value)}
-                    />
-                    <Button size="sm" className="w-full h-9 text-xs" onClick={() => sendFeedback.mutate()} disabled={sendFeedback.isPending}>
-                      {sendFeedback.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Send className="h-3.5 w-3.5 mr-1.5" />}
-                      Submit Feedback
-                    </Button>
-                  </motion.div>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-3">
-                <p className="text-sm font-medium text-green-600 dark:text-green-400">Thank you for your feedback! 🙏</p>
-              </div>
-            )}
-
-            {/* Share */}
-            <Button variant="outline" size="sm" className="w-full h-9 text-xs" onClick={handleShare}>
-              <Share2 className="h-3.5 w-3.5 mr-1.5" /> Share Receipt
+            <Textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Leave a short note optional" />
+            <Button disabled={feedback.isPending} onClick={() => feedback.mutate()}>
+              Send feedback
             </Button>
           </CardContent>
         </Card>
-      </motion.div>
+        {order.table_number ? (
+          <div className="text-center">
+            <Link href={`/order/${order.branch_id}/${order.table_number}`}>
+              <Button variant="ghost">Order more</Button>
+            </Link>
+          </div>
+        ) : null}
+      </div>
+    </main>
+  );
+}
+
+function MiniStat({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-secondary p-3">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </div>
+      <p className="mt-1 text-sm font-semibold capitalize">{value.replace("_", " ")}</p>
     </div>
   );
+}
+
+function Line({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className={`flex justify-between ${strong ? "text-base font-semibold" : "text-muted-foreground"}`}>
+      <span>{label}</span>
+      <span className="font-numbers text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function safeParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value ?? "";
 }
