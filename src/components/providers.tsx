@@ -2,7 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
-import { Toaster } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/hooks/use-auth";
 import { useState } from "react";
 
@@ -30,7 +30,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       >
         <AuthProvider>
           {children}
-          <Toaster position="top-right" richColors closeButton />
+          <Toaster position="top-right" richColors closeButton duration={3000} />
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

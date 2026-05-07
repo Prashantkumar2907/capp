@@ -3,101 +3,46 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { formatCurrency, timeAgo, generateOrderNumber } from "@/lib/helpers";
-import { ORDER_STATUS_LABELS, TABLE_STATUS_COLORS } from "@/lib/constants";
+import { formatCurrency, generateOrderNumber, timeAgo } from "@/lib/helpers";
+import { SectionHeader } from "@/components/common/section-header";
+import { EmptyState } from "@/components/common/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { ClipboardList, Plus, Minus, ShoppingCart, UtensilsCrossed, Loader2 } from "lucide-react";
-
-type CartItem = { dish_id: string; dish_name: string; price: number; quantity: number };
+import { motion } from "framer-motion";
+import { ClipboardList, Plus, Minus, Check, ShoppingBag, Search, Loader2, Clock } from "lucide-react";
 
 export default function WaiterPage() {
   const { branch, staff } = useAuth();
+  const { orders, refetch } = useRealtimeOrders(branch?.id);
   const [supabase] = useState(() => createClient());
-  const queryClient = useQueryClient();
-  const { orders } = useRealtimeOrders(branch?.id);
   const [selectedTable, setSelectedTable] = useState<number | null>(null);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [orderDialogOpen, setOrderDialogOpen] = useState(false);
+  const [orderDialog, setOrderDialog] = useState(false);
+  const [cart, setCart] = useState<Record<string, { name: string; qty: number; price: number }>>({});
+  const [search, setSearch] = useState("");
+  const [placing, setPlacing] = useState(false);
 
   const { data: tables } = useQuery({
-    queryKey: ["tables", branch?.id],
+    queryKey: ["tables-waiter", branch?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("tables").select("*").eq("branch_id", branch!.id).eq("is_active", true).order("table_number");
+      const { data } = await supabase.from("tables").select("*").eq("branch_id", branch!.id).order("table_number");
       return data || [];
     },
     enabled: !!branch,
   });
 
   const { data: dishes } = useQuery({
-    queryKey: ["dishes", branch?.id],
+    queryKey: ["dishes-waiter", branch?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("branch_dishes").select("*, dishes(id, name, price, is_veg, category_id, categories(name))").eq("branch_id", branch!.id).eq("is_available", true);
+      const { data } = await supabase.from("dishes").select("*, categories(name)").eq("org_id", staff!.org_id).eq("is_active", true).order("name");
       return data || [];
     },
-    enabled: !!branch,
-  });
-
-  const myOrders = orders?.filter(o => o.waiter_id === staff?.id && ["pending", "confirmed", "preparing", "ready"].includes(o.status)) || [];
-
-  const addToCart = (dish: any) => {
-    setCart(prev => {
-      const existing = prev.find(c => c.dish_id === dish.dishes.id);
-      if (existing) return prev.map(c => c.dish_id === dish.dishes.id ? { ...c, quantity: c.quantity + 1 } : c);
-      return [...prev, { dish_id: dish.dishes.id, dish_name: dish.dishes.name, price: Number(dish.custom_price || dish.dishes.price), quantity: 1 }];
-    });
-  };
-
-  const updateCartQty = (dishId: string, delta: number) => {
-    setCart(prev => prev.map(c => c.dish_id === dishId ? { ...c, quantity: Math.max(0, c.quantity + delta) } : c).filter(c => c.quantity > 0));
-  };
-
-  const cartTotal = cart.reduce((s, c) => s + c.price * c.quantity, 0);
-
-  const placeOrder = useMutation({
-    mutationFn: async () => {
-      if (!selectedTable || cart.length === 0) throw new Error("Select a table and add items");
-      const orderNumber = generateOrderNumber();
-      const { data: order, error } = await supabase.from("orders").insert({
-        order_number: orderNumber,
-        branch_id: branch!.id,
-        table_number: selectedTable,
-        waiter_id: staff?.id,
-        order_type: "dine_in",
-        status: "pending",
-        subtotal: cartTotal,
-        tax: 0,
-        total: cartTotal,
-      }).select().single();
-      if (error) throw error;
-
-      const items = cart.map(c => ({
-        order_id: order.id,
-        branch_id: branch!.id,
-        dish_id: c.dish_id,
-        dish_name: c.dish_name,
-        quantity: c.quantity,
-        price_at_order: c.price,
-        status: "pending",
-      }));
-      const { error: itemsError } = await supabase.from("order_items").insert(items);
-      if (itemsError) throw itemsError;
-
-      return order;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      setCart([]);
-      setOrderDialogOpen(false);
-      toast.success("Order placed!");
-    },
-    onError: (err: Error) => toast.error(err.message),
+    enabled: !!staff,
   });
 
   const markServed = useMutation({
@@ -105,155 +50,172 @@ export default function WaiterPage() {
       const { error } = await supabase.from("orders").update({ status: "served" }).eq("id", orderId);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders"] }),
+    onSuccess: () => { refetch(); toast.success("Marked as served"); },
   });
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold font-poppins">Waiter</h1>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">{myOrders.length} active orders</p>
-        </div>
-        <Button size="sm" className="bg-teal-500 hover:bg-teal-600 text-white h-8 text-xs" onClick={() => setOrderDialogOpen(true)}>
-          <Plus className="h-3.5 w-3.5 mr-1" /> New Order
-        </Button>
-      </div>
+  const addToCart = (dish: any) => {
+    setCart(prev => ({
+      ...prev,
+      [dish.id]: prev[dish.id] ? { ...prev[dish.id], qty: prev[dish.id].qty + 1 } : { name: dish.name, qty: 1, price: dish.price },
+    }));
+  };
 
-      {/* Tables Grid */}
+  const removeFromCart = (id: string) => {
+    setCart(prev => {
+      const copy = { ...prev };
+      if (copy[id]?.qty > 1) copy[id] = { ...copy[id], qty: copy[id].qty - 1 };
+      else delete copy[id];
+      return copy;
+    });
+  };
+
+  const cartTotal = Object.values(cart).reduce((s, i) => s + i.price * i.qty, 0);
+  const cartCount = Object.values(cart).reduce((s, i) => s + i.qty, 0);
+
+  const placeOrder = async () => {
+    if (!selectedTable || cartCount === 0) return;
+    setPlacing(true);
+    try {
+      const orderNumber = generateOrderNumber();
+      const { data: order, error } = await supabase.from("orders").insert({
+        order_number: orderNumber, branch_id: branch!.id,
+        table_number: selectedTable, waiter_id: staff!.id,
+        order_type: "dine_in", status: "pending",
+        subtotal: cartTotal, tax: 0, total: cartTotal,
+      }).select().single();
+      if (error) throw error;
+
+      const items = Object.entries(cart).map(([id, item]) => ({
+        order_id: order.id, branch_id: branch!.id, dish_id: id,
+        dish_name: item.name, quantity: item.qty, price_at_order: item.price,
+      }));
+      await supabase.from("order_items").insert(items);
+
+      toast.success(`Order #${orderNumber} placed for Table ${selectedTable}`);
+      setCart({}); setOrderDialog(false); setSelectedTable(null); refetch();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setPlacing(false);
+    }
+  };
+
+  const activeOrders = orders?.filter(o => ["pending", "confirmed", "preparing", "ready"].includes(o.status)) || [];
+  const filteredDishes = dishes?.filter(d => !search || d.name.toLowerCase().includes(search.toLowerCase())) || [];
+
+  return (
+    <div className="space-y-5">
+      <SectionHeader title="Waiter View" description="Take orders and manage tables" badge="WAITER" />
+
+      {/* Table selection grid */}
       <div>
-        <h2 className="text-xs font-semibold mb-2">Tables</h2>
-        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
-          {tables?.map(t => {
-            const hasOrder = orders?.some(o => o.table_number === t.table_number && ["pending", "confirmed", "preparing", "ready"].includes(o.status));
+        <h3 className="text-sm font-semibold mb-3">Select Table to Order</h3>
+        <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
+          {tables?.map(table => {
+            const hasOrders = activeOrders.some(o => o.table_number === table.table_number);
             return (
-              <button
-                key={t.id}
-                onClick={() => { setSelectedTable(t.table_number); setOrderDialogOpen(true); }}
-                className={`h-12 rounded-lg border-2 text-xs font-medium transition-all ${
-                  hasOrder ? "border-orange-400 bg-orange-50 dark:bg-orange-950/30 text-orange-600" :
-                  t.status === "available" ? "border-teal-400 bg-teal-50 dark:bg-teal-950/30 text-teal-600 hover:bg-teal-100" :
-                  "border-zinc-300 dark:border-zinc-700 text-zinc-400"
-                }`}
+              <Button
+                key={table.id}
+                variant={selectedTable === table.table_number ? "default" : hasOrders ? "secondary" : "outline"}
+                size="sm"
+                className={`h-12 text-sm font-bold relative ${hasOrders && selectedTable !== table.table_number ? "border-amber-300" : ""}`}
+                onClick={() => { setSelectedTable(table.table_number); setOrderDialog(true); }}
               >
-                T{t.table_number}
-              </button>
+                {table.table_number}
+                {hasOrders && <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-amber-400 animate-pulse" />}
+              </Button>
             );
           })}
         </div>
       </div>
 
-      {/* My Active Orders */}
+      {/* Active orders */}
       <div>
-        <h2 className="text-xs font-semibold mb-2">My Orders</h2>
-        {myOrders.length === 0 ? (
-          <p className="text-xs text-zinc-400 text-center py-6">No active orders</p>
+        <h3 className="text-sm font-semibold mb-3">Active Orders ({activeOrders.length})</h3>
+        {activeOrders.length === 0 ? (
+          <EmptyState icon={ClipboardList} title="No active orders" description="Select a table above to create an order" className="py-8" />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {myOrders.map(o => (
-              <Card key={o.id} className="border-zinc-200 dark:border-zinc-800">
-                <CardContent className="p-3">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-teal-600">#{o.order_number}</span>
-                      <Badge className="text-[9px] h-4">Table {o.table_number}</Badge>
-                      <Badge variant="outline" className="text-[9px] h-4">{ORDER_STATUS_LABELS[o.status as keyof typeof ORDER_STATUS_LABELS]}</Badge>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {activeOrders.slice(0, 10).map((order, i) => (
+              <motion.div key={order.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+                <Card className="card-hover">
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-primary">#{order.order_number}</span>
+                        {order.table_number && <Badge variant="outline" className="text-[9px] h-4">Table {order.table_number}</Badge>}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                        <Clock className="h-2.5 w-2.5" /> {timeAgo(order.created_at)}
+                      </div>
                     </div>
-                    <span className="text-[10px] text-zinc-500">{timeAgo(o.created_at)}</span>
-                  </div>
-                  <div className="space-y-0.5">
-                    {o.order_items?.slice(0, 3).map((item: any) => (
-                      <p key={item.id} className="text-[10px] text-zinc-500">{item.quantity}× {item.dish_name}</p>
-                    ))}
-                    {(o.order_items?.length || 0) > 3 && <p className="text-[10px] text-zinc-400">+{(o.order_items?.length || 0) - 3} more</p>}
-                  </div>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-xs font-semibold">{formatCurrency(Number(o.total))}</span>
-                    {o.status === "ready" && (
-                      <Button size="sm" className="h-6 text-[10px] bg-teal-500 hover:bg-teal-600 text-white" onClick={() => markServed.mutate(o.id)}>
-                        Mark Served
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                    <div className="space-y-1 mb-2">
+                      {order.order_items?.slice(0, 3).map((item: any) => (
+                        <p key={item.id} className="text-xs text-muted-foreground"><span className="font-medium text-foreground">{item.quantity}×</span> {item.dish_name}</p>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Badge variant="outline" className="text-[10px] capitalize">{order.status}</Badge>
+                      {order.status === "ready" && (
+                        <Button size="sm" className="h-7 text-[10px]" onClick={() => markServed.mutate(order.id)}>
+                          <Check className="h-3 w-3 mr-1" /> Mark Served
+                        </Button>
+                      )}
+                      <span className="text-xs font-bold">{formatCurrency(Number(order.total))}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
             ))}
           </div>
         )}
       </div>
 
       {/* New Order Dialog */}
-      <Dialog open={orderDialogOpen} onOpenChange={setOrderDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <Dialog open={orderDialog} onOpenChange={(open) => { setOrderDialog(open); if (!open) setCart({}); }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle className="text-sm font-poppins flex items-center gap-2">
-              <UtensilsCrossed className="h-4 w-4" />
-              New Order — Table {selectedTable || "?"}
-            </DialogTitle>
+            <DialogTitle className="text-sm">New Order — Table {selectedTable}</DialogTitle>
           </DialogHeader>
-
-          {/* Table selector */}
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            {tables?.filter(t => t.status === "available").map(t => (
-              <button
-                key={t.id}
-                className={`h-7 w-10 rounded text-[10px] font-medium border ${selectedTable === t.table_number ? "border-teal-500 bg-teal-500 text-white" : "border-zinc-300 dark:border-zinc-700 text-zinc-500 hover:border-teal-400"}`}
-                onClick={() => setSelectedTable(t.table_number)}
-              >
-                T{t.table_number}
-              </button>
-            ))}
+          <div className="relative mb-3">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input className="h-9 pl-9 text-xs" placeholder="Search dishes..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-
-          {/* Menu Items */}
-          <div className="space-y-1 max-h-48 overflow-y-auto">
-            {dishes?.map(d => {
-              const item = cart.find(c => c.dish_id === d.dishes?.id);
+          <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+            {filteredDishes.map(dish => {
+              const qty = cart[dish.id]?.qty || 0;
               return (
-                <div key={d.id} className="flex items-center justify-between p-2 rounded-md border border-zinc-200 dark:border-zinc-800">
-                  <div className="flex-1">
+                <div key={dish.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className={`h-2 w-2 rounded-full ${d.dishes?.is_veg ? "bg-green-500" : "bg-red-500"}`} />
-                      <span className="text-xs">{d.dishes?.name}</span>
+                      {dish.is_veg ? <span className="h-3 w-3 rounded-sm border border-green-500 flex items-center justify-center"><span className="h-1.5 w-1.5 rounded-full bg-green-500" /></span>
+                        : <span className="h-3 w-3 rounded-sm border border-red-500 flex items-center justify-center"><span className="h-1.5 w-1.5 rounded-full bg-red-500" /></span>}
+                      <span className="text-xs font-medium truncate">{dish.name}</span>
                     </div>
-                    <span className="text-[10px] text-teal-600 font-medium">{formatCurrency(Number(d.custom_price || d.dishes?.price || 0))}</span>
+                    <span className="text-[10px] text-primary font-medium">{formatCurrency(dish.price)}</span>
                   </div>
-                  {item ? (
-                    <div className="flex items-center gap-1">
-                      <Button variant="outline" size="sm" className="h-6 w-6 p-0" onClick={() => updateCartQty(d.dishes!.id, -1)}><Minus className="h-2.5 w-2.5" /></Button>
-                      <span className="text-xs w-5 text-center">{item.quantity}</span>
-                      <Button variant="outline" size="sm" className="h-6 w-6 p-0" onClick={() => updateCartQty(d.dishes!.id, 1)}><Plus className="h-2.5 w-2.5" /></Button>
+                  {qty > 0 ? (
+                    <div className="flex items-center gap-1.5">
+                      <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => removeFromCart(dish.id)}><Minus className="h-3 w-3" /></Button>
+                      <span className="w-5 text-center text-xs font-bold">{qty}</span>
+                      <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => addToCart(dish)}><Plus className="h-3 w-3" /></Button>
                     </div>
                   ) : (
-                    <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => addToCart(d)}>Add</Button>
+                    <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => addToCart(dish)}>Add</Button>
                   )}
                 </div>
               );
             })}
           </div>
-
-          {/* Cart Summary */}
-          {cart.length > 0 && (
-            <div className="border-t pt-3 mt-3">
-              <div className="space-y-1">
-                {cart.map(c => (
-                  <div key={c.dish_id} className="flex justify-between text-xs">
-                    <span>{c.quantity}× {c.dish_name}</span>
-                    <span>{formatCurrency(c.price * c.quantity)}</span>
-                  </div>
-                ))}
+          {cartCount > 0 && (
+            <div className="border-t border-border pt-3 mt-3 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">{cartCount} items</span>
+                <span className="font-bold text-primary">{formatCurrency(cartTotal)}</span>
               </div>
-              <div className="flex justify-between text-sm font-bold mt-2 pt-2 border-t">
-                <span>Total</span>
-                <span className="text-teal-600">{formatCurrency(cartTotal)}</span>
-              </div>
-              <Button
-                className="w-full bg-teal-500 hover:bg-teal-600 text-white h-8 text-xs mt-3"
-                onClick={() => placeOrder.mutate()}
-                disabled={placeOrder.isPending || !selectedTable}
-              >
-                {placeOrder.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <ShoppingCart className="h-3 w-3 mr-1" />}
-                Place Order ({cart.reduce((s,c) => s + c.quantity, 0)} items)
+              <Button className="w-full h-10 text-sm" onClick={placeOrder} disabled={placing}>
+                {placing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShoppingBag className="h-4 w-4 mr-2" />}
+                Place Order
               </Button>
             </div>
           )}

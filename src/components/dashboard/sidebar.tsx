@@ -1,177 +1,150 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { useUIStore } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
-import { getInitials } from "@/lib/helpers";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
+import { motion } from "framer-motion";
 import {
-  LayoutDashboard,
-  UtensilsCrossed,
-  Store,
-  Users,
-  ChefHat,
-  QrCode,
-  BarChart3,
-  Settings,
-  LogOut,
-  CreditCard,
-  ClipboardList,
-  MonitorSmartphone,
-  PanelLeftClose,
-  PanelLeftOpen,
+  LayoutDashboard, ShoppingCart, ChefHat, UtensilsCrossed, Users,
+  BarChart3, CreditCard, Settings, LogOut, Store, MapPin, ClipboardList,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 
-interface NavItem {
-  label: string;
-  href: string;
-  icon: React.ElementType;
-  roles: string[];
-}
+type NavItem = { href: string; label: string; icon: React.ComponentType<any>; roles?: string[] };
 
-const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["owner", "admin", "manager"] },
-  { label: "Orders", href: "/dashboard/orders", icon: ClipboardList, roles: ["owner", "admin", "manager"] },
-  { label: "Menu", href: "/dashboard/menu", icon: UtensilsCrossed, roles: ["owner", "admin", "manager"] },
-  { label: "Tables", href: "/dashboard/tables", icon: QrCode, roles: ["owner", "admin", "manager"] },
-  { label: "Branches", href: "/dashboard/branches", icon: Store, roles: ["owner"] },
-  { label: "Staff", href: "/dashboard/staff", icon: Users, roles: ["owner", "admin"] },
-  { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3, roles: ["owner", "admin"] },
-  { label: "Payments", href: "/dashboard/payments", icon: CreditCard, roles: ["owner", "admin", "cashier"] },
-  { label: "Kitchen", href: "/dashboard/kitchen", icon: ChefHat, roles: ["kitchen", "owner", "admin"] },
-  { label: "Waiter", href: "/dashboard/waiter", icon: MonitorSmartphone, roles: ["waiter", "owner", "admin"] },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["owner", "admin"] },
+const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
+  {
+    label: "Overview",
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { href: "/dashboard/orders", label: "Orders", icon: ShoppingCart, roles: ["owner", "admin", "manager", "waiter", "cashier"] },
+      { href: "/dashboard/kitchen", label: "Kitchen", icon: ChefHat, roles: ["owner", "admin", "manager", "kitchen"] },
+      { href: "/dashboard/waiter", label: "Waiter", icon: ClipboardList, roles: ["owner", "admin", "manager", "waiter"] },
+      { href: "/dashboard/payments", label: "Payments", icon: CreditCard, roles: ["owner", "admin", "manager", "cashier"] },
+    ],
+  },
+  {
+    label: "Management",
+    items: [
+      { href: "/dashboard/menu", label: "Menu", icon: UtensilsCrossed, roles: ["owner", "admin", "manager"] },
+      { href: "/dashboard/tables", label: "Tables", icon: MapPin, roles: ["owner", "admin", "manager"] },
+      { href: "/dashboard/branches", label: "Branches", icon: Store, roles: ["owner", "admin"] },
+      { href: "/dashboard/staff", label: "Staff", icon: Users, roles: ["owner", "admin"] },
+    ],
+  },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { staff, organization, signOut, role } = useAuth();
-  const { sidebarCollapsed, toggleSidebar } = useUIStore();
+  const router = useRouter();
+  const { staff, organization } = useAuth();
+  const role = staff?.role || "waiter";
 
-  const handleSignOut = () => {
-    if (window.confirm("Are you sure you want to sign out?")) {
-      signOut();
-    }
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    toast.success("Signed out");
+    router.push("/sign-in");
   };
 
-  const filteredItems = navItems.filter((item) => role && item.roles.includes(role));
-
   return (
-    <TooltipProvider delay={0}>
-      <aside
-        className={cn(
-          "h-screen flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0 transition-all duration-200 ease-out",
-          sidebarCollapsed ? "w-[52px]" : "w-52"
-        )}
-      >
-        {/* Logo */}
-        <div className="h-12 flex items-center gap-2 px-3 border-b border-zinc-200 dark:border-zinc-800">
-          <div className="h-7 w-7 rounded-lg bg-teal-500 flex items-center justify-center shrink-0 hover:bg-teal-600 transition-colors cursor-pointer" onClick={toggleSidebar}>
-            <UtensilsCrossed className="h-3.5 w-3.5 text-white" />
-          </div>
-          {!sidebarCollapsed && (
-            <span className="text-sm font-bold font-poppins truncate">
-              {organization?.name || "RestaurantOS"}
-            </span>
-          )}
+    <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-[260px] flex-col bg-card border-r border-border z-40">
+      {/* Brand */}
+      <div className="h-16 flex items-center gap-2.5 px-5 border-b border-border shrink-0">
+        <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center">
+          <UtensilsCrossed className="h-5 w-5 text-primary-foreground" />
         </div>
-
-        {/* Nav */}
-        <nav className="flex-1 overflow-y-auto scrollbar-hide py-1.5 px-1.5">
-          {filteredItems.map((item) => {
-            const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
-            const linkContent = (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "group flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 mb-0.5",
-                  isActive
-                    ? "bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400"
-                    : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 hover:text-zinc-800 dark:hover:text-zinc-200",
-                  sidebarCollapsed && "justify-center px-0"
-                )}
-              >
-                <item.icon className={cn(
-                  "h-4 w-4 shrink-0 transition-transform duration-150",
-                  !isActive && "group-hover:scale-110"
-                )} />
-                {!sidebarCollapsed && item.label}
-              </Link>
-            );
-
-            if (sidebarCollapsed) {
-              return (
-                <Tooltip key={item.href}>
-                  <TooltipTrigger>{linkContent}</TooltipTrigger>
-                  <TooltipContent side="right" className="text-xs">{item.label}</TooltipContent>
-                </Tooltip>
-              );
-            }
-            return linkContent;
-          })}
-        </nav>
-
-        <Separator />
-
-        {/* Collapse toggle */}
-        <div className={cn("px-1.5 py-1", sidebarCollapsed && "flex justify-center")}>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-center text-zinc-400 hover:text-zinc-600 h-7"
-            onClick={toggleSidebar}
-          >
-            {sidebarCollapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
-          </Button>
+        <div className="min-w-0">
+          <p className="text-sm font-bold truncate">{organization?.name || "RestaurantOS"}</p>
+          <p className="text-[10px] text-muted-foreground truncate">{staff?.role ? staff.role.charAt(0).toUpperCase() + staff.role.slice(1) : ""}</p>
         </div>
+      </div>
 
-        {/* User */}
-        <div className={cn("p-2 border-t border-zinc-200 dark:border-zinc-800", sidebarCollapsed && "flex flex-col items-center")}>
-          {sidebarCollapsed ? (
-            <Tooltip>
-              <TooltipTrigger>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={handleSignOut}>
-                  <Avatar className="h-6 w-6">
-                    <AvatarFallback className="text-[9px] bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300">
-                      {staff ? getInitials(staff.full_name) : "?"}
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="text-xs">{staff?.full_name} · Sign Out</TooltipContent>
-            </Tooltip>
-          ) : (
-            <>
-              <div className="flex items-center gap-2 mb-1.5">
-                <Avatar className="h-6 w-6">
-                  <AvatarFallback className="text-[9px] bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300">
-                    {staff ? getInitials(staff.full_name) : "?"}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-medium truncate">{staff?.full_name}</p>
-                  <p className="text-[9px] text-zinc-400">{role}</p>
-                </div>
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-6 scrollbar-hide">
+        {NAV_SECTIONS.map((section) => {
+          const visibleItems = section.items.filter(
+            (item) => !item.roles || item.roles.includes(role)
+          );
+          if (visibleItems.length === 0) return null;
+
+          return (
+            <div key={section.label}>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">
+                {section.label}
+              </p>
+              <div className="space-y-0.5">
+                {visibleItems.map((item) => {
+                  const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "relative flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-150",
+                        isActive
+                          ? "text-primary"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      )}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId="sidebar-active-pill"
+                          className="absolute inset-0 bg-primary/10 rounded-lg"
+                          transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                        />
+                      )}
+                      <item.icon className={cn("relative h-4 w-4 shrink-0 z-10", isActive && "text-primary")} />
+                      <span className="relative z-10">{item.label}</span>
+                      {isActive && (
+                        <div className="relative z-10 ml-auto h-1.5 w-1.5 rounded-full bg-primary" />
+                      )}
+                    </Link>
+                  );
+                })}
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start text-[11px] h-7 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                onClick={handleSignOut}
-              >
-                <LogOut className="h-3 w-3 mr-1.5" />
-                Sign Out
-              </Button>
-            </>
+            </div>
+          );
+        })}
+      </nav>
+
+      {/* Bottom section */}
+      <div className="border-t border-border p-3 space-y-1 shrink-0">
+        <Link
+          href="/dashboard/settings"
+          className={cn(
+            "relative flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+            pathname === "/dashboard/settings"
+              ? "text-primary"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
           )}
-        </div>
-      </aside>
-    </TooltipProvider>
+        >
+          {pathname === "/dashboard/settings" && (
+            <motion.div
+              layoutId="sidebar-active-pill"
+              className="absolute inset-0 bg-primary/10 rounded-lg"
+              transition={{ type: "spring", stiffness: 380, damping: 32 }}
+            />
+          )}
+          <Settings className="relative h-4 w-4 z-10" />
+          <span className="relative z-10">Settings</span>
+        </Link>
+        <button
+          onClick={handleSignOut}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+        >
+          <LogOut className="h-4 w-4" />
+          <span>Sign Out</span>
+        </button>
+      </div>
+    </aside>
   );
 }

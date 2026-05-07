@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,32 +9,37 @@ import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/validations"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2, UtensilsCrossed } from "lucide-react";
+import { Loader2, Lock, Check, X } from "lucide-react";
+import { motion } from "framer-motion";
 
 export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-40"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>}>
+      <ResetPasswordForm />
+    </Suspense>
+  );
+}
+
+function ResetPasswordForm() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
-  useEffect(() => {
-    // Supabase will set the session from the URL hash automatically
-  }, []);
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<ResetPasswordInput>({
+  const { register, handleSubmit, formState: { errors }, watch } = useForm<ResetPasswordInput>({
     resolver: zodResolver(resetPasswordSchema) as any,
   });
 
+  const password = watch("password", "");
+  const requirements = [
+    { met: password.length >= 6, label: "At least 6 characters" },
+    { met: /[A-Z]/.test(password), label: "One uppercase letter" },
+    { met: /[0-9]/.test(password), label: "One number" },
+  ];
+
   const onSubmit = async (data: ResetPasswordInput) => {
     setIsLoading(true);
-    const { error } = await supabase.auth.updateUser({
-      password: data.password,
-    });
+    const { error } = await supabase.auth.updateUser({ password: data.password });
     setIsLoading(false);
 
     if (error) {
@@ -42,53 +47,66 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    toast.success("Password updated successfully");
+    toast.success("Password updated successfully!");
     router.push("/dashboard");
   };
 
   return (
-    <Card>
-      <CardHeader className="text-center">
-        <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-teal-500 text-white">
-          <UtensilsCrossed className="h-6 w-6" />
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="space-y-6"
+    >
+      <div className="space-y-2">
+        <h1 className="text-2xl font-bold tracking-tight">Set new password</h1>
+        <p className="text-sm text-muted-foreground">
+          Enter your new password below.
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="password" className="text-sm">New Password</Label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input id="password" type="password" placeholder="New password" className="h-11 pl-10 text-sm" {...register("password")} />
+          </div>
+          {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+
+          {/* Requirements checklist */}
+          {password && (
+            <div className="space-y-1.5 mt-2">
+              {requirements.map((req) => (
+                <div key={req.label} className="flex items-center gap-2 text-xs">
+                  {req.met ? (
+                    <Check className="h-3.5 w-3.5 text-green-500" />
+                  ) : (
+                    <X className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                  <span className={req.met ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}>
+                    {req.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        <CardTitle className="text-2xl font-poppins">Reset password</CardTitle>
-        <CardDescription>Enter your new password below</CardDescription>
-      </CardHeader>
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="password">New Password</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              {...register("password")}
-            />
-            {errors.password && (
-              <p className="text-sm text-destructive">{errors.password.message}</p>
-            )}
+
+        <div className="space-y-2">
+          <Label htmlFor="confirmPassword" className="text-sm">Confirm Password</Label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input id="confirmPassword" type="password" placeholder="Confirm new password" className="h-11 pl-10 text-sm" {...register("confirmPassword")} />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              placeholder="••••••••"
-              {...register("confirmPassword")}
-            />
-            {errors.confirmPassword && (
-              <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
-            )}
-          </div>
-        </CardContent>
-        <CardFooter>
-          <Button type="submit" className="w-full bg-teal-500 hover:bg-teal-600" disabled={isLoading}>
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Update Password
-          </Button>
-        </CardFooter>
+          {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>}
+        </div>
+
+        <Button type="submit" className="w-full h-11 text-sm font-medium" disabled={isLoading}>
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Update Password
+        </Button>
       </form>
-    </Card>
+    </motion.div>
   );
 }

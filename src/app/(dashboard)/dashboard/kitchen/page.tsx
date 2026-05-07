@@ -2,155 +2,163 @@
 
 import { useAuth } from "@/hooks/use-auth";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { ITEM_STATUS, ITEM_STATUS_LABELS } from "@/lib/constants";
-import { timeAgo } from "@/lib/helpers";
+import { SectionHeader } from "@/components/common/section-header";
+import { EmptyState } from "@/components/common/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { ChefHat, Clock, Flame, CheckCircle2, Volume2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import { ChefHat, Clock, Check, ArrowRight, Volume2, VolumeX } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
-const ITEM_STATUS_FLOW = ["pending", "accepted", "preparing", "ready"];
-const ITEM_COLORS: Record<string, string> = {
-  pending: "border-yellow-500 bg-yellow-950/30",
-  accepted: "border-blue-500 bg-blue-950/30",
-  preparing: "border-orange-500 bg-orange-950/30",
-  ready: "border-teal-500 bg-teal-950/30",
-  served: "border-zinc-600 bg-zinc-900/30",
-};
+function getElapsedMinutes(created: string) {
+  return Math.floor((Date.now() - new Date(created).getTime()) / 60000);
+}
+
+function getUrgencyColor(minutes: number) {
+  if (minutes < 10) return { bg: "bg-green-50 dark:bg-green-950/20", text: "text-green-600 dark:text-green-400", border: "border-green-200 dark:border-green-800" };
+  if (minutes < 20) return { bg: "bg-amber-50 dark:bg-amber-950/20", text: "text-amber-600 dark:text-amber-400", border: "border-amber-200 dark:border-amber-800" };
+  return { bg: "bg-red-50 dark:bg-red-950/20", text: "text-red-600 dark:text-red-400", border: "border-red-200 dark:border-red-800" };
+}
 
 export default function KitchenPage() {
   const { branch } = useAuth();
-  const { orders, isLoading } = useRealtimeOrders(branch?.id);
-  const [supabase] = useState(() => createClient());
-  const queryClient = useQueryClient();
-  const prevOrderCount = useRef(0);
+  const { orders, isLoading, refetch } = useRealtimeOrders(branch?.id);
+  const supabase = createClient();
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [, setTick] = useState(0);
+  const prevCount = useRef(0);
 
-  // Audio alert for new orders
+  // Refresh timer display every 30s
   useEffect(() => {
-    if (orders && orders.length > prevOrderCount.current && prevOrderCount.current > 0 && soundEnabled) {
+    const interval = setInterval(() => setTick(t => t + 1), 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Sound alert
+  useEffect(() => {
+    const kitchenOrders = orders?.filter(o => ["pending", "confirmed", "preparing"].includes(o.status)) || [];
+    if (kitchenOrders.length > prevCount.current && prevCount.current > 0 && soundEnabled) {
       try {
         const ctx = new AudioContext();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = 800;
-        gain.gain.value = 0.3;
-        osc.start();
-        osc.stop(ctx.currentTime + 0.2);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = 880; gain.gain.value = 0.4;
+        osc.start(); osc.stop(ctx.currentTime + 0.3);
+        setTimeout(() => { const o2 = ctx.createOscillator(); const g2 = ctx.createGain(); o2.connect(g2); g2.connect(ctx.destination); o2.frequency.value = 1100; g2.gain.value = 0.3; o2.start(); o2.stop(ctx.currentTime + 0.2); }, 200);
       } catch {}
     }
-    prevOrderCount.current = orders?.length || 0;
-  }, [orders?.length, soundEnabled]);
+    prevCount.current = kitchenOrders.length;
+  }, [orders, soundEnabled]);
 
-  const activeOrders = orders?.filter(o => ["confirmed", "preparing"].includes(o.status)) || [];
-
-  const updateItemStatus = useMutation({
-    mutationFn: async ({ itemId, status }: { itemId: string; status: string }) => {
-      const { error } = await supabase.from("order_items").update({ status }).eq("id", itemId);
+  const updateStatus = useMutation({
+    mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
+      const { error } = await supabase.from("orders").update({ status }).eq("id", orderId);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders"] }),
+    onSuccess: () => { refetch(); toast.success("Updated"); },
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const getNextStatus = (current: string) => {
-    const idx = ITEM_STATUS_FLOW.indexOf(current);
-    return idx < ITEM_STATUS_FLOW.length - 1 ? ITEM_STATUS_FLOW[idx + 1] : null;
-  };
+  const kitchenOrders = orders?.filter(o => ["pending", "confirmed", "preparing", "ready"].includes(o.status)) || [];
 
   return (
-    <div className="min-h-full bg-zinc-950 text-white -m-4 p-4">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <ChefHat className="h-5 w-5 text-teal-400" />
-          <h1 className="text-lg font-bold font-poppins text-white">Kitchen Display</h1>
-          <Badge className="bg-teal-500/20 text-teal-400 text-[10px]">{activeOrders.length} active</Badge>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={`h-7 text-xs ${soundEnabled ? "text-teal-400" : "text-zinc-500"}`}
-          onClick={() => setSoundEnabled(!soundEnabled)}
-        >
-          <Volume2 className="h-3.5 w-3.5 mr-1" /> Sound {soundEnabled ? "On" : "Off"}
-        </Button>
-      </div>
+    <div className="space-y-5">
+      <SectionHeader
+        title="Kitchen Display"
+        description={`${kitchenOrders.length} active orders`}
+        badge="KDS"
+        actions={
+          <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5" onClick={() => setSoundEnabled(!soundEnabled)}>
+            {soundEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+            {soundEnabled ? "Sound On" : "Sound Off"}
+          </Button>
+        }
+      />
 
       {isLoading ? (
-        <div className="text-zinc-500 text-center py-20">Loading orders...</div>
-      ) : activeOrders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
-          <ChefHat className="h-12 w-12 mb-3 text-zinc-700" />
-          <p className="text-sm">No active orders</p>
-          <p className="text-[10px]">Orders will appear here in real-time</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1,2,3].map(i => <div key={i} className="h-48 rounded-xl bg-muted animate-pulse" />)}
         </div>
+      ) : kitchenOrders.length === 0 ? (
+        <EmptyState icon={ChefHat} title="All caught up!" description="No pending orders. New orders will appear here automatically." />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {activeOrders.map((order) => (
-            <Card key={order.id} className="bg-zinc-900 border-zinc-800">
-              <CardContent className="p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-teal-400">#{order.order_number}</span>
-                    <Badge className="text-[9px] h-4 bg-zinc-800 text-zinc-300">
-                      Table {order.table_number || "—"}
-                    </Badge>
-                  </div>
-                  <span className="text-[10px] text-zinc-500 flex items-center gap-1">
-                    <Clock className="h-2.5 w-2.5" />{timeAgo(order.created_at)}
-                  </span>
-                </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {kitchenOrders.map((order, i) => {
+            const mins = getElapsedMinutes(order.created_at);
+            const urgency = getUrgencyColor(mins);
+            const nextStatus = order.status === "pending" ? "confirmed"
+              : order.status === "confirmed" ? "preparing"
+              : order.status === "preparing" ? "ready"
+              : null;
 
-                <div className="space-y-1.5">
-                  {order.order_items?.map((item: any) => {
-                    const next = getNextStatus(item.status);
-                    return (
-                      <div
-                        key={item.id}
-                        className={`flex items-center justify-between p-2 rounded border-l-2 ${ITEM_COLORS[item.status] || "border-zinc-700 bg-zinc-800/50"}`}
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-medium text-white">{item.quantity}× {item.dish_name}</span>
+            return (
+              <motion.div key={order.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+                <Card className={`overflow-hidden border-2 ${urgency.border}`}>
+                  {/* Timer bar */}
+                  <div className={`px-4 py-2.5 flex items-center justify-between ${urgency.bg}`}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-primary">#{order.order_number}</span>
+                      {order.table_number && (
+                        <Badge variant="outline" className="text-[10px] h-5">Table {order.table_number}</Badge>
+                      )}
+                    </div>
+                    <div className={`flex items-center gap-1.5 text-sm font-bold ${urgency.text}`}>
+                      <Clock className="h-4 w-4" />
+                      {mins}m
+                    </div>
+                  </div>
+
+                  <CardContent className="p-4 space-y-3">
+                    {/* Items */}
+                    <div className="space-y-2">
+                      {order.order_items?.map((item: any) => (
+                        <div key={item.id} className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
+                          <div className="flex items-center gap-2 flex-1">
+                            <span className="h-6 w-6 rounded-md bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+                              {item.quantity}
+                            </span>
+                            <span className="text-sm font-medium">{item.dish_name}</span>
                           </div>
-                          {item.notes && <p className="text-[9px] text-zinc-400 mt-0.5">{item.notes}</p>}
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <Badge className="text-[8px] h-3.5 bg-transparent border border-zinc-700 text-zinc-400">
-                            {ITEM_STATUS_LABELS[item.status as keyof typeof ITEM_STATUS_LABELS] || item.status}
-                          </Badge>
-                          {next && (
-                            <Button
-                              size="sm"
-                              className="h-6 text-[10px] px-2 bg-teal-600 hover:bg-teal-700 text-white"
-                              onClick={() => updateItemStatus.mutate({ itemId: item.id, status: next })}
-                              disabled={updateItemStatus.isPending}
-                            >
-                              {next === "accepted" && "Accept"}
-                              {next === "preparing" && <><Flame className="h-2.5 w-2.5 mr-0.5" />Cook</>}
-                              {next === "ready" && <><CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />Ready</>}
-                            </Button>
+                          {item.notes && (
+                            <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-full max-w-[120px] truncate">
+                              {item.notes}
+                            </span>
                           )}
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      ))}
+                    </div>
 
-                {order.notes && (
-                  <p className="text-[10px] text-amber-400 mt-2 p-1.5 bg-amber-950/30 rounded">
-                    Note: {order.notes}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                    {order.notes && (
+                      <div className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-2 italic">
+                        📝 {order.notes}
+                      </div>
+                    )}
+
+                    {/* Action */}
+                    {nextStatus ? (
+                      <Button
+                        className="w-full h-10 text-sm font-medium"
+                        onClick={() => updateStatus.mutate({ orderId: order.id, status: nextStatus })}
+                        disabled={updateStatus.isPending}
+                      >
+                        {nextStatus === "confirmed" ? "Accept Order" : nextStatus === "preparing" ? "Start Cooking" : "Mark Ready"}
+                        <ArrowRight className="h-4 w-4 ml-1.5" />
+                      </Button>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 py-2 text-sm font-medium text-green-600 dark:text-green-400">
+                        <Check className="h-4 w-4" /> Ready for Pickup
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </div>

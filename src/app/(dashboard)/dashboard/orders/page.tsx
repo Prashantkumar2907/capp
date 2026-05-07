@@ -4,38 +4,62 @@ import { useAuth } from "@/hooks/use-auth";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { formatCurrency, formatTime, timeAgo } from "@/lib/helpers";
-import { ORDER_STATUS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, ITEM_STATUS_LABELS } from "@/lib/constants";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrency, timeAgo } from "@/lib/helpers";
+import { ORDER_STATUS_LABELS, ITEM_STATUS_LABELS } from "@/lib/constants";
+import { SectionHeader } from "@/components/common/section-header";
+import { EmptyState } from "@/components/common/empty-state";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Clock, ChevronRight } from "lucide-react";
+import { motion } from "framer-motion";
+import { Clock, ChevronRight, ShoppingCart, Volume2, VolumeX } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 
 const KANBAN_COLUMNS = [
-  { status: "pending", label: "Pending" },
-  { status: "confirmed", label: "Confirmed" },
-  { status: "preparing", label: "Preparing" },
-  { status: "ready", label: "Ready" },
-  { status: "served", label: "Served" },
+  { status: "pending", label: "Pending", color: "border-amber-400", bg: "bg-amber-400" },
+  { status: "confirmed", label: "Confirmed", color: "border-blue-400", bg: "bg-blue-400" },
+  { status: "preparing", label: "Preparing", color: "border-orange-400", bg: "bg-orange-400" },
+  { status: "ready", label: "Ready", color: "border-green-400", bg: "bg-green-400" },
+  { status: "served", label: "Served", color: "border-muted-foreground", bg: "bg-muted-foreground" },
 ];
+
+function getTimeColor(createdAt: string) {
+  const mins = (Date.now() - new Date(createdAt).getTime()) / 60000;
+  if (mins < 10) return "text-green-600 dark:text-green-400";
+  if (mins < 20) return "text-amber-600 dark:text-amber-400";
+  return "text-red-600 dark:text-red-400";
+}
 
 export default function OrdersPage() {
   const { branch } = useAuth();
   const { orders, isLoading, refetch } = useRealtimeOrders(branch?.id);
   const supabase = createClient();
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const prevCount = useRef(0);
+
+  useEffect(() => {
+    if (orders && orders.length > prevCount.current && prevCount.current > 0 && soundEnabled) {
+      try {
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = 800; gain.gain.value = 0.3;
+        osc.start(); osc.stop(ctx.currentTime + 0.2);
+      } catch {}
+    }
+    prevCount.current = orders?.length || 0;
+  }, [orders?.length, soundEnabled]);
 
   const updateStatus = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
       const { error } = await supabase.from("orders").update({ status }).eq("id", orderId);
       if (error) throw error;
     },
-    onSuccess: () => {
-      refetch();
-      toast.success("Order updated");
-    },
+    onSuccess: () => { refetch(); toast.success("Order updated"); },
     onError: (err: Error) => toast.error(err.message),
   });
 
@@ -48,95 +72,109 @@ export default function OrdersPage() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <h1 className="text-xl font-bold font-poppins">Orders</h1>
+        <Skeleton className="h-8 w-40" />
         <div className="grid grid-cols-5 gap-3">
-          {[1,2,3,4,5].map(i => (
-            <div key={i} className="space-y-2">
-              <Skeleton className="h-6 w-20" />
-              <Skeleton className="h-32 w-full" />
-            </div>
-          ))}
+          {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-[400px] rounded-xl" />)}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold font-poppins">Orders</h1>
-        <Badge variant="outline" className="text-xs">{orders.length} active</Badge>
-      </div>
+    <div className="space-y-5">
+      <SectionHeader
+        title="Orders"
+        description={`${orders.length} active orders`}
+        actions={
+          <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5"
+            onClick={() => setSoundEnabled(!soundEnabled)}>
+            {soundEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+            Sound {soundEnabled ? "On" : "Off"}
+          </Button>
+        }
+      />
 
       {/* Kanban Board */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {KANBAN_COLUMNS.map((col) => {
           const columnOrders = orders.filter((o) => o.status === col.status);
           return (
-            <div key={col.status}>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                  {col.label}
-                </h3>
-                <Badge variant="secondary" className="text-[9px] h-4">{columnOrders.length}</Badge>
+            <div key={col.status} className="min-h-[200px]">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className={`h-2.5 w-2.5 rounded-full ${col.bg}`} />
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {col.label}
+                  </h3>
+                </div>
+                <Badge variant="secondary" className="text-[10px] h-5 px-1.5">{columnOrders.length}</Badge>
               </div>
-              <ScrollArea className="h-[calc(100vh-200px)]">
-                <div className="space-y-2 pr-2">
-                  {columnOrders.map((order) => {
+              <ScrollArea className="h-[calc(100vh-240px)]">
+                <div className="space-y-2.5 pr-1">
+                  {columnOrders.map((order, i) => {
                     const next = getNextStatus(order.status);
                     return (
-                      <Card key={order.id} className="border-zinc-200 dark:border-zinc-800">
-                        <CardContent className="p-3 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-teal-600 dark:text-teal-400">
-                              #{order.order_number}
-                            </span>
-                            <Badge className={`text-[9px] h-4 ${ORDER_STATUS_COLORS[order.status] || ""}`}>
-                              {ORDER_STATUS_LABELS[order.status]}
-                            </Badge>
-                          </div>
-
-                          {order.table_number && (
-                            <p className="text-[10px] text-zinc-500">Table {order.table_number}</p>
-                          )}
-
-                          {/* Items */}
-                          <div className="space-y-0.5">
-                            {order.order_items?.slice(0, 4).map((item) => (
-                              <div key={item.id} className="flex items-center justify-between text-[10px]">
-                                <span className="truncate flex-1">{item.quantity}x {item.dish_name}</span>
-                                <Badge variant="outline" className="text-[8px] h-3.5 ml-1">{ITEM_STATUS_LABELS[item.status] || item.status}</Badge>
-                              </div>
-                            ))}
-                            {(order.order_items?.length || 0) > 4 && (
-                              <p className="text-[9px] text-zinc-400">+{order.order_items.length - 4} more</p>
-                            )}
-                          </div>
-
-                          <div className="flex items-center justify-between pt-1 border-t border-zinc-100 dark:border-zinc-800">
-                            <div className="flex items-center gap-1 text-[10px] text-zinc-400">
-                              <Clock className="h-2.5 w-2.5" />
-                              {timeAgo(order.created_at)}
+                      <motion.div
+                        key={order.id}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.05 }}
+                      >
+                        <Card className={`border-l-[3px] ${col.color} overflow-hidden card-hover`}>
+                          <CardContent className="p-3 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-primary">#{order.order_number}</span>
+                              <Badge variant="outline" className="text-[9px] h-4">
+                                {ORDER_STATUS_LABELS[order.status as keyof typeof ORDER_STATUS_LABELS] || order.status}
+                              </Badge>
                             </div>
-                            <span className="text-xs font-semibold">{formatCurrency(order.total)}</span>
-                          </div>
 
-                          {next && (
-                            <Button
-                              size="sm"
-                              className="w-full bg-teal-500 hover:bg-teal-600 text-white h-7 text-[10px]"
-                              onClick={() => updateStatus.mutate({ orderId: order.id, status: next })}
-                              disabled={updateStatus.isPending}
-                            >
-                              Move to {ORDER_STATUS_LABELS[next]} <ChevronRight className="h-3 w-3 ml-0.5" />
-                            </Button>
-                          )}
-                        </CardContent>
-                      </Card>
+                            {order.table_number && (
+                              <p className="text-[10px] text-muted-foreground">Table {order.table_number}</p>
+                            )}
+
+                            {/* Items */}
+                            <div className="space-y-1">
+                              {order.order_items?.slice(0, 4).map((item: any) => (
+                                <div key={item.id} className="flex items-center justify-between text-[11px]">
+                                  <span className="truncate flex-1 text-muted-foreground">
+                                    <span className="font-medium text-foreground">{item.quantity}×</span> {item.dish_name}
+                                  </span>
+                                </div>
+                              ))}
+                              {(order.order_items?.length || 0) > 4 && (
+                                <p className="text-[10px] text-muted-foreground">+{order.order_items.length - 4} more</p>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-between pt-2 border-t border-border">
+                              <div className={`flex items-center gap-1 text-[10px] font-medium ${getTimeColor(order.created_at)}`}>
+                                <Clock className="h-2.5 w-2.5" />
+                                {timeAgo(order.created_at)}
+                              </div>
+                              <span className="text-xs font-bold">{formatCurrency(Number(order.total))}</span>
+                            </div>
+
+                            {next && (
+                              <Button
+                                size="sm"
+                                className="w-full h-7 text-[10px] mt-1"
+                                onClick={() => updateStatus.mutate({ orderId: order.id, status: next })}
+                                disabled={updateStatus.isPending}
+                              >
+                                {ORDER_STATUS_LABELS[next as keyof typeof ORDER_STATUS_LABELS] || next}
+                                <ChevronRight className="h-3 w-3 ml-0.5" />
+                              </Button>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </motion.div>
                     );
                   })}
                   {columnOrders.length === 0 && (
-                    <div className="text-center py-6 text-[10px] text-zinc-400">No orders</div>
+                    <div className="flex items-center justify-center py-12 text-[10px] text-muted-foreground">
+                      No orders
+                    </div>
                   )}
                 </div>
               </ScrollArea>

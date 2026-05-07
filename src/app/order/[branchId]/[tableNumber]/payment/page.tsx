@@ -13,7 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, QrCode, Minus, Plus, Trash2, StickyNote } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowLeft, Loader2, QrCode, Minus, Plus, Trash2, StickyNote, CheckCircle2, ShoppingBag } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import Link from "next/link";
 
@@ -24,8 +25,8 @@ export default function PaymentPage() {
   const tableNumber = Number(params.tableNumber);
   const [supabase] = useState(() => createClient());
 
-  const { items, removeItem, updateQuantity, updateItemNotes, getSubtotal, clearCart } = useCartStore();
-  const [step, setStep] = useState<"cart" | "upi">("cart");
+  const { items, removeItem, updateQuantity, updateItemNotes, getSubtotal, clearCart, getItemCount } = useCartStore();
+  const [step, setStep] = useState<"cart" | "upi" | "success">("cart");
   const [orderNotes, setOrderNotes] = useState("");
   const [placing, setPlacing] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -33,9 +34,8 @@ export default function PaymentPage() {
   const [taxPercent, setTaxPercent] = useState<number | null>(null);
   const [taxInclusive, setTaxInclusive] = useState(true);
 
-  // Fetch org tax settings on mount
   useEffect(() => {
-    async function fetchTaxSettings() {
+    async function fetchTax() {
       const { data: branch } = await supabase
         .from("branches")
         .select("organizations(default_tax_percent, tax_inclusive)")
@@ -49,79 +49,69 @@ export default function PaymentPage() {
         setTaxPercent(5);
       }
     }
-    fetchTaxSettings();
+    fetchTax();
   }, [branchId, supabase]);
 
   const subtotal = getSubtotal();
-  const effectiveTaxPercent = taxPercent ?? 5;
-  const tax = taxInclusive ? 0 : Math.round(subtotal * (effectiveTaxPercent / 100) * 100) / 100;
+  const effectiveTax = taxPercent ?? 5;
+  const tax = taxInclusive ? 0 : Math.round(subtotal * (effectiveTax / 100) * 100) / 100;
   const total = subtotal + tax;
 
   const placeOrder = async () => {
     if (items.length === 0) return;
     setPlacing(true);
     try {
-      // Fetch branch UPI VPA
-      const { data: branch } = await supabase.from("branches").select("upi_vpa, organizations(name, default_tax_percent, tax_inclusive)").eq("id", branchId).single();
+      const { data: branch } = await supabase
+        .from("branches")
+        .select("upi_vpa, organizations(name, default_tax_percent, tax_inclusive)")
+        .eq("id", branchId)
+        .single();
 
-      const taxPercent = (branch as any)?.organizations?.default_tax_percent || 5;
-      const taxInclusive = (branch as any)?.organizations?.tax_inclusive ?? true;
-      const computedTax = taxInclusive ? 0 : Math.round(subtotal * (taxPercent / 100) * 100) / 100;
+      const tp = (branch as any)?.organizations?.default_tax_percent || 5;
+      const ti = (branch as any)?.organizations?.tax_inclusive ?? true;
+      const computedTax = ti ? 0 : Math.round(subtotal * (tp / 100) * 100) / 100;
       const computedTotal = subtotal + computedTax;
 
       const orderNumber = generateOrderNumber();
-      const { data: order, error } = await supabase.from("orders").insert({
-        order_number: orderNumber,
-        branch_id: branchId,
-        table_number: tableNumber,
-        order_type: "dine_in",
-        status: "pending",
-        subtotal,
-        tax: computedTax,
-        total: computedTotal,
-        notes: orderNotes || null,
-      }).select().single();
+      const { data: order, error } = await supabase
+        .from("orders")
+        .insert({
+          order_number: orderNumber, branch_id: branchId,
+          table_number: tableNumber, order_type: "dine_in", status: "pending",
+          subtotal, tax: computedTax, total: computedTotal,
+          notes: orderNotes || null,
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
       const orderItems = items.map(i => ({
-        order_id: order.id,
-        branch_id: branchId,
-        dish_id: i.dish_id,
-        dish_name: i.dish_name,
-        quantity: i.quantity,
-        price_at_order: i.unit_price,
-        notes: i.notes || null,
-        status: "pending",
+        order_id: order.id, branch_id: branchId, dish_id: i.dish_id,
+        dish_name: i.dish_name, quantity: i.quantity,
+        price_at_order: i.unit_price, notes: i.notes || null, status: "pending",
       }));
 
       const { error: itemsErr } = await supabase.from("order_items").insert(orderItems);
       if (itemsErr) throw itemsErr;
 
-      // Create pending payment
-      const { error: payErr } = await supabase.from("payments").insert({
-        order_id: order.id,
-        branch_id: branchId,
-        amount: computedTotal,
-        method: "upi",
-        status: "pending",
+      await supabase.from("payments").insert({
+        order_id: order.id, branch_id: branchId,
+        amount: computedTotal, method: "upi", status: "pending",
       });
 
       setOrderId(order.id);
 
-      // Generate UPI QR if VPA exists
       if (branch?.upi_vpa) {
         const link = generateUPILink(
-          branch.upi_vpa,
-          computedTotal,
-          orderNumber,
+          branch.upi_vpa, computedTotal, orderNumber,
           (branch as any)?.organizations?.name || "Restaurant"
         );
         setUpiLink(link);
       }
 
-      setStep("upi");
       clearCart();
+      setStep("success");
       toast.success("Order placed successfully!");
     } catch (err: any) {
       toast.error(err.message || "Failed to place order");
@@ -130,121 +120,147 @@ export default function PaymentPage() {
     }
   };
 
-  if (step === "upi" && orderId) {
+  // Success / UPI screen
+  if (step === "success" && orderId) {
     return (
-      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center p-4">
-        <Card className="max-w-sm w-full border-zinc-200 dark:border-zinc-800">
-          <CardContent className="p-6 text-center">
-            <div className="h-12 w-12 rounded-full bg-teal-100 dark:bg-teal-900 flex items-center justify-center mx-auto mb-3">
-              <QrCode className="h-6 w-6 text-teal-500" />
-            </div>
-            <h2 className="text-lg font-bold font-poppins">Pay {formatCurrency(total)}</h2>
-            <p className="text-xs text-zinc-500 mt-1">Scan the QR code with any UPI app</p>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", bounce: 0.3 }}>
+          <Card className="max-w-sm w-full border-border shadow-xl">
+            <CardContent className="p-6 text-center space-y-4">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2, type: "spring", bounce: 0.5 }}
+              >
+                <div className="mx-auto h-16 w-16 rounded-2xl bg-green-100 dark:bg-green-950/30 flex items-center justify-center">
+                  <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
+                </div>
+              </motion.div>
 
-            {upiLink ? (
-              <div className="my-4 flex justify-center">
-                <QRCodeSVG value={upiLink} size={200} fgColor="#14b8a6" includeMargin />
+              <div>
+                <h2 className="text-lg font-bold">Order Placed! 🎉</h2>
+                <p className="text-xs text-muted-foreground mt-1">Your order is being prepared</p>
               </div>
-            ) : (
-              <div className="my-4 p-4 bg-zinc-100 dark:bg-zinc-800 rounded-lg">
-                <p className="text-xs text-zinc-500">UPI payment not configured. Please pay at counter.</p>
+
+              {upiLink ? (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium">Pay {formatCurrency(total)}</p>
+                  <div className="flex justify-center p-4 bg-white rounded-xl">
+                    <QRCodeSVG value={upiLink} size={180} fgColor="#14b8a6" includeMargin />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Scan with any UPI app to pay
+                  </p>
+                </div>
+              ) : (
+                <div className="p-4 bg-muted rounded-xl">
+                  <p className="text-xs text-muted-foreground">
+                    UPI not configured. Please pay at the counter.
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-2 pt-2">
+                <Link href={`/receipt/${orderId}`}>
+                  <Button className="w-full h-10 text-sm">View Receipt</Button>
+                </Link>
+                <Link href={`/order/${branchId}/${tableNumber}`}>
+                  <Button variant="outline" className="w-full h-9 text-xs">Order More</Button>
+                </Link>
               </div>
-            )}
-
-            <p className="text-[10px] text-zinc-400 mb-4">
-              After payment, your order will be confirmed automatically
-            </p>
-
-            <div className="space-y-2">
-              <Link href={`/receipt/${orderId}`}>
-                <Button className="w-full bg-teal-500 hover:bg-teal-600 text-white h-9 text-xs">
-                  View Receipt
-                </Button>
-              </Link>
-              <Link href={`/order/${branchId}/${tableNumber}`}>
-                <Button variant="outline" className="w-full h-8 text-xs">
-                  Order More
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 px-4 py-3">
+      <div className="sticky top-0 z-10 bg-card/95 backdrop-blur-md border-b border-border px-4 py-3">
         <div className="max-w-lg mx-auto flex items-center gap-3">
           <Link href={`/order/${branchId}/${tableNumber}`}>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
           <div>
-            <h1 className="text-sm font-bold font-poppins">Your Cart</h1>
-            <p className="text-[10px] text-zinc-500">Table {tableNumber} · {items.length} items</p>
+            <h1 className="text-sm font-bold">Your Cart</h1>
+            <p className="text-[10px] text-muted-foreground">
+              Table {tableNumber} · {getItemCount()} item{getItemCount() > 1 ? "s" : ""}
+            </p>
           </div>
         </div>
       </div>
 
       {/* Cart Items */}
-      <div className="flex-1 px-4 py-3 max-w-lg mx-auto w-full">
+      <div className="flex-1 px-4 py-4 max-w-lg mx-auto w-full">
         {items.length === 0 ? (
-          <div className="text-center py-20 text-zinc-400">
-            <p className="text-sm">Cart is empty</p>
+          <div className="text-center py-20">
+            <ShoppingBag className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">Your cart is empty</p>
             <Link href={`/order/${branchId}/${tableNumber}`}>
-              <Button variant="link" className="text-teal-500 text-xs mt-2">Browse Menu</Button>
+              <Button variant="link" className="text-primary text-xs mt-2">Browse Menu</Button>
             </Link>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {items.map(item => (
-              <Card key={item.dish_id} className="border-zinc-200 dark:border-zinc-800">
-                <CardContent className="p-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-xs font-medium">{item.dish_name}</p>
-                      <p className="text-[10px] text-teal-600 font-medium">{formatCurrency(item.unit_price)} each</p>
+              <motion.div key={item.dish_id} layout>
+                <Card className="overflow-hidden">
+                  <CardContent className="p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          {item.is_veg ? (
+                            <span className="h-3 w-3 rounded-sm border border-green-500 flex items-center justify-center shrink-0"><span className="h-1.5 w-1.5 rounded-full bg-green-500" /></span>
+                          ) : (
+                            <span className="h-3 w-3 rounded-sm border border-red-500 flex items-center justify-center shrink-0"><span className="h-1.5 w-1.5 rounded-full bg-red-500" /></span>
+                          )}
+                          <span className="text-sm font-medium truncate">{item.dish_name}</span>
+                        </div>
+                        <p className="text-[10px] text-primary font-medium mt-0.5">{formatCurrency(item.unit_price)} each</p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Button variant="outline" size="sm" className="h-7 w-7 p-0"
+                          onClick={() => item.quantity <= 1 ? removeItem(item.dish_id) : updateQuantity(item.dish_id, item.quantity - 1)}>
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <span className="w-5 text-center text-xs font-bold">{item.quantity}</span>
+                        <Button variant="outline" size="sm" className="h-7 w-7 p-0"
+                          onClick={() => updateQuantity(item.dish_id, item.quantity + 1)}>
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive ml-1"
+                          onClick={() => removeItem(item.dish_id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Button variant="outline" size="sm" className="h-6 w-6 p-0" onClick={() => {
-                        if (item.quantity <= 1) removeItem(item.dish_id);
-                        else updateQuantity(item.dish_id, item.quantity - 1);
-                      }}>
-                        <Minus className="h-2.5 w-2.5" />
-                      </Button>
-                      <span className="text-xs w-5 text-center">{item.quantity}</span>
-                      <Button variant="outline" size="sm" className="h-6 w-6 p-0" onClick={() => updateQuantity(item.dish_id, item.quantity + 1)}>
-                        <Plus className="h-2.5 w-2.5" />
-                      </Button>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500 ml-1" onClick={() => removeItem(item.dish_id)}>
-                        <Trash2 className="h-2.5 w-2.5" />
-                      </Button>
+
+                    <div className="flex justify-between items-center mt-2">
+                      <Input
+                        className="h-7 text-[10px] flex-1 mr-3 rounded-lg"
+                        placeholder="Add note (e.g. less spicy)"
+                        value={item.notes || ""}
+                        onChange={e => updateItemNotes(item.dish_id, e.target.value)}
+                      />
+                      <span className="text-sm font-bold shrink-0">{formatCurrency(item.unit_price * item.quantity)}</span>
                     </div>
-                  </div>
-                  <div className="flex justify-between items-center mt-1">
-                    <Input
-                      className="h-6 text-[10px] flex-1 mr-2"
-                      placeholder="Add note (e.g. less spicy)"
-                      value={item.notes || ""}
-                      onChange={e => updateItemNotes(item.dish_id, e.target.value)}
-                    />
-                    <span className="text-xs font-semibold">{formatCurrency(item.unit_price * item.quantity)}</span>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </motion.div>
             ))}
 
-            {/* Order Notes */}
+            {/* Order notes */}
             <div className="pt-2">
               <Label className="text-xs flex items-center gap-1 mb-1.5">
                 <StickyNote className="h-3 w-3" /> Order Notes
               </Label>
               <Textarea
-                className="text-xs min-h-[60px]"
+                className="text-xs min-h-[60px] rounded-xl"
                 placeholder="Any special instructions..."
                 value={orderNotes}
                 onChange={e => setOrderNotes(e.target.value)}
@@ -254,31 +270,31 @@ export default function PaymentPage() {
         )}
       </div>
 
-      {/* Payment Footer */}
+      {/* Payment footer */}
       {items.length > 0 && (
-        <div className="sticky bottom-0 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 px-4 py-3">
+        <div className="sticky bottom-0 bg-card/95 backdrop-blur-md border-t border-border px-4 py-4">
           <div className="max-w-lg mx-auto">
-            <div className="space-y-1 mb-3">
+            <div className="space-y-1.5 mb-4">
               <div className="flex justify-between text-xs">
-                <span className="text-zinc-500">Subtotal</span>
+                <span className="text-muted-foreground">Subtotal</span>
                 <span>{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-zinc-500">Tax ({taxInclusive ? "Inclusive" : `${effectiveTaxPercent}%`})</span>
+                <span className="text-muted-foreground">Tax ({taxInclusive ? "Inclusive" : `${effectiveTax}%`})</span>
                 <span>{formatCurrency(tax)}</span>
               </div>
               <Separator />
-              <div className="flex justify-between text-sm font-bold">
+              <div className="flex justify-between text-base font-bold">
                 <span>Total</span>
-                <span className="text-teal-600">{formatCurrency(total)}</span>
+                <span className="text-primary">{formatCurrency(total)}</span>
               </div>
             </div>
             <Button
-              className="w-full bg-teal-500 hover:bg-teal-600 text-white h-10 text-xs font-medium"
+              className="w-full h-12 text-sm font-medium rounded-xl shadow-lg shadow-primary/20"
               onClick={placeOrder}
               disabled={placing}
             >
-              {placing ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <QrCode className="h-3.5 w-3.5 mr-2" />}
+              {placing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <QrCode className="h-4 w-4 mr-2" />}
               Place Order & Pay via UPI
             </Button>
           </div>

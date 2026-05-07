@@ -4,202 +4,157 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { inviteStaffSchema, type InviteStaffInput } from "@/lib/validations";
-import { ROLES, ROLE_LABELS } from "@/lib/constants";
+import { SectionHeader } from "@/components/common/section-header";
+import { EmptyState } from "@/components/common/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Plus, Loader2, UserCircle, Mail, Shield, XCircle, CheckCircle } from "lucide-react";
+import { motion } from "framer-motion";
+import { Plus, Users, UserPlus, Pencil, Trash2, Loader2, Shield } from "lucide-react";
+import type { Staff } from "@/lib/supabase/types";
 
+const ROLES = ["owner", "admin", "manager", "waiter", "kitchen", "cashier"] as const;
 const ROLE_COLORS: Record<string, string> = {
-  owner: "bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300",
-  admin: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-  manager: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
-  waiter: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
-  kitchen: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300",
-  cashier: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+  owner: "bg-purple-100 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400",
+  admin: "bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400",
+  manager: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary",
+  waiter: "bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400",
+  kitchen: "bg-orange-100 text-orange-700 dark:bg-orange-950/30 dark:text-orange-400",
+  cashier: "bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400",
 };
 
 export default function StaffPage() {
-  const { organization, branch } = useAuth();
+  const { organization, branch, staff: currentStaff } = useAuth();
   const [supabase] = useState(() => createClient());
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Staff | null>(null);
+  const [form, setForm] = useState({ full_name: "", email: "", phone: "", role: "waiter" as string });
+  const [saving, setSaving] = useState(false);
+  const [roleFilter, setRoleFilter] = useState("all");
 
-  const { data: branches } = useQuery({
-    queryKey: ["branches", organization?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("branches").select("id, name").eq("org_id", organization!.id).eq("is_active", true);
-      return data || [];
-    },
-    enabled: !!organization,
-  });
-
-  const { data: staff, isLoading } = useQuery({
+  const { data: staffList, isLoading } = useQuery({
     queryKey: ["staff", organization?.id],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("staff")
-        .select("*")
-        .eq("org_id", organization!.id)
-        .order("created_at");
+      const { data } = await supabase.from("staff").select("*").eq("org_id", organization!.id).order("created_at");
       return data || [];
     },
     enabled: !!organization,
   });
 
-  const form = useForm({
-    resolver: zodResolver(inviteStaffSchema) as any,
-    defaultValues: { full_name: "", email: "", phone: "", role: "waiter", branch_id: branch?.id || "" },
-  });
-
-  const inviteStaff = useMutation({
-    mutationFn: async (data: any) => {
-      // In production, this would send an invite email. For MVP, create a placeholder staff record.
-      const { error } = await supabase.from("staff").insert({
-        full_name: data.full_name,
-        email: data.email,
-        role: data.role,
-        org_id: organization!.id,
-        branch_id: branch?.id || data.branch_id,
-        is_active: true,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
+  const save = async () => {
+    setSaving(true);
+    try {
+      if (editing) {
+        const { error } = await supabase.from("staff").update({ full_name: form.full_name, email: form.email, phone: form.phone, role: form.role as any }).eq("id", editing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("staff").insert({
+          org_id: organization!.id, branch_id: branch?.id || null,
+          full_name: form.full_name, email: form.email,
+          phone: form.phone || null, role: form.role as any,
+        });
+        if (error) throw error;
+      }
       queryClient.invalidateQueries({ queryKey: ["staff"] });
-      setDialogOpen(false);
-      form.reset();
-      toast.success("Staff member added");
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
+      setDialogOpen(false); setEditing(null);
+      toast.success(editing ? "Staff updated" : "Staff invited");
+    } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
+  };
 
-  const toggleStaff = useMutation({
-    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await supabase.from("staff").update({ is_active }).eq("id", id);
+  const deleteStaff = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("staff").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["staff"] }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["staff"] }); toast.success("Staff removed"); },
   });
+
+  const filtered = staffList?.filter(s => roleFilter === "all" || s.role === roleFilter) || [];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold font-poppins">Staff</h1>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {staff?.filter(s => s.is_active).length || 0} active · {staff?.length || 0} total
-          </p>
-        </div>
-        <Button size="sm" className="bg-teal-500 hover:bg-teal-600 text-white h-8 text-xs" onClick={() => setDialogOpen(true)}>
-          <Plus className="h-3.5 w-3.5 mr-1" /> Add Staff
-        </Button>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle className="text-sm font-poppins">Add Staff Member</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={form.handleSubmit((d) => inviteStaff.mutate(d))} className="space-y-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Full Name</Label>
-                <Input className="h-8 text-xs" {...form.register("full_name")} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Email</Label>
-                <Input className="h-8 text-xs" type="email" {...form.register("email")} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Role</Label>
-                <Select defaultValue="waiter" onValueChange={(v) => form.setValue("role", v as InviteStaffInput["role"])}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(ROLES).filter(([k]) => k !== "OWNER").map(([key, value]) => (
-                      <SelectItem key={key} value={value} className="text-xs">{key.charAt(0) + key.slice(1).toLowerCase()}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Branch</Label>
-                <Select defaultValue={branch?.id || ""} onValueChange={(v) => { if (v) form.setValue("branch_id", v); }}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Select branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {branches?.map((b) => (
-                      <SelectItem key={b.id} value={b.id} className="text-xs">{b.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button type="submit" className="w-full bg-teal-500 hover:bg-teal-600 text-white h-8 text-xs" disabled={inviteStaff.isPending}>
-                {inviteStaff.isPending && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-                Add Staff
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+    <div className="space-y-5">
+      <SectionHeader
+        title="Staff"
+        description={`${staffList?.length || 0} team members`}
+        actions={
+          <Button size="sm" className="h-9 text-xs" onClick={() => { setEditing(null); setForm({ full_name: "", email: "", phone: "", role: "waiter" }); setDialogOpen(true); }}>
+            <UserPlus className="h-3.5 w-3.5 mr-1" /> Invite Staff
+          </Button>
+        }
+      />
+
+      {/* Role filter */}
+      <div className="flex gap-2 flex-wrap">
+        {["all", ...ROLES].map(r => (
+          <button key={r} onClick={() => setRoleFilter(r)}
+            className={`px-3 py-1.5 rounded-lg text-[11px] font-medium capitalize transition-colors ${roleFilter === r ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
+            {r === "all" ? "All" : r} {r !== "all" && `(${staffList?.filter(s => s.role === r).length || 0})`}
+          </button>
+        ))}
       </div>
 
       {isLoading ? (
+        <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
+      ) : filtered.length > 0 ? (
         <div className="space-y-2">
-          {[1,2,3].map(i => <Skeleton key={i} className="h-16" />)}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {staff?.map((s) => (
-            <Card key={s.id} className={`card-hover border-zinc-200 dark:border-zinc-800 ${!s.is_active ? "opacity-50" : ""}`}>
-              <CardContent className="p-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-full bg-teal-50 dark:bg-teal-950 flex items-center justify-center shrink-0">
-                    <UserCircle className="h-4 w-4 text-teal-500" />
+          {filtered.map((member, i) => (
+            <motion.div key={member.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+              <Card className="card-hover">
+                <CardContent className="p-3 flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
+                    {member.full_name?.charAt(0).toUpperCase() || "?"}
                   </div>
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{s.full_name || "Unnamed"}</span>
-                      <Badge className={`text-[9px] h-4 px-1.5 ${ROLE_COLORS[s.role] || "bg-zinc-100 text-zinc-600"}`}>
-                        {ROLE_LABELS[s.role] || s.role}
-                      </Badge>
+                      <span className="text-sm font-medium">{member.full_name || "Unnamed"}</span>
+                      {member.id === currentStaff?.id && <Badge variant="outline" className="text-[8px] h-4">You</Badge>}
                     </div>
-                    {s.email && (
-                      <p className="text-[10px] text-zinc-500 flex items-center gap-1">
-                        <Mail className="h-2.5 w-2.5" />{s.email}
-                      </p>
-                    )}
+                    <p className="text-[10px] text-muted-foreground">{member.email}</p>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {s.role !== "owner" && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => toggleStaff.mutate({ id: s.id, is_active: !s.is_active })}
-                    >
-                      {s.is_active ? (
-                        <><XCircle className="h-3 w-3 mr-1 text-red-500" /> Deactivate</>
-                      ) : (
-                        <><CheckCircle className="h-3 w-3 mr-1 text-green-500" /> Activate</>
-                      )}
-                    </Button>
+                  <Badge className={`text-[10px] h-5 capitalize ${ROLE_COLORS[member.role] || ""}`}>
+                    <Shield className="h-2.5 w-2.5 mr-1" /> {member.role}
+                  </Badge>
+                  <Badge variant={member.is_active ? "default" : "secondary"} className="text-[9px] h-4">{member.is_active ? "Active" : "Inactive"}</Badge>
+                  {member.id !== currentStaff?.id && (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { setEditing(member); setForm({ full_name: member.full_name || "", email: member.email || "", phone: member.phone || "", role: member.role }); setDialogOpen(true); }}><Pencil className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive" onClick={() => { if (confirm("Remove this staff member?")) deleteStaff.mutate(member.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    </div>
                   )}
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </motion.div>
           ))}
         </div>
+      ) : (
+        <EmptyState icon={Users} title="No staff members" actionLabel="Invite Staff" onAction={() => setDialogOpen(true)} />
       )}
+
+      <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setEditing(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle className="text-sm">{editing ? "Edit" : "Invite"} Staff</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5"><Label className="text-xs">Full Name</Label><Input className="h-9 text-xs" value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label className="text-xs">Email</Label><Input className="h-9 text-xs" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label className="text-xs">Phone</Label><Input className="h-9 text-xs" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Role</Label>
+              <select className="w-full h-9 text-xs border rounded-md px-2 bg-transparent" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
+                {ROLES.filter(r => r !== "owner").map(r => <option key={r} value={r} className="capitalize">{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+              </select>
+            </div>
+            <Button className="w-full h-9 text-xs" onClick={save} disabled={saving || !form.full_name || !form.email}>
+              {saving && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />} {editing ? "Update" : "Invite"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

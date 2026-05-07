@@ -1,226 +1,206 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams } from "next/navigation";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { formatCurrency, formatDate } from "@/lib/helpers";
-import { PAYMENT_STATUS_LABELS, ORDER_STATUS_LABELS } from "@/lib/constants";
+import { formatCurrency } from "@/lib/helpers";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Receipt, Star, CheckCircle2, Loader2 } from "lucide-react";
-
-type OrderData = {
-  id: string;
-  order_number: string;
-  table_number: number | null;
-  status: string;
-  subtotal: number;
-  tax: number;
-  total: number;
-  notes: string | null;
-  created_at: string;
-  branch_id: string;
-  items: { dish_name: string; quantity: number; price_at_order: number }[];
-  payment: { status: string; method: string } | null;
-  branch: { name: string; org_name: string };
-};
+import { motion } from "framer-motion";
+import { Receipt, Star, Send, Loader2, UtensilsCrossed, Share2 } from "lucide-react";
 
 export default function ReceiptPage() {
   const params = useParams();
   const orderId = params.orderId as string;
   const [supabase] = useState(() => createClient());
-
-  const [order, setOrder] = useState<OrderData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [feedbackSent, setFeedbackSent] = useState(false);
-  const [sendingFeedback, setSendingFeedback] = useState(false);
 
-  useEffect(() => {
-    async function load() {
-      const { data: o } = await supabase
+  const { data: order, isLoading } = useQuery({
+    queryKey: ["receipt", orderId],
+    queryFn: async () => {
+      const { data } = await supabase
         .from("orders")
-        .select("id, order_number, table_number, status, subtotal, tax, total, notes, created_at, branch_id, branches(name, organizations(name))")
+        .select("*, order_items(*), branches(name, organizations(name))")
         .eq("id", orderId)
         .single();
+      return data;
+    },
+  });
 
-      if (!o) { setLoading(false); return; }
-
-      const { data: items } = await supabase
-        .from("order_items")
-        .select("dish_name, quantity, price_at_order")
-        .eq("order_id", orderId);
-
-      const { data: payment } = await supabase
-        .from("payments")
-        .select("status, method")
-        .eq("order_id", orderId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      const { data: existingFeedback } = await supabase
-        .from("feedback")
-        .select("id")
-        .eq("order_id", orderId)
-        .limit(1);
-
-      if (existingFeedback && existingFeedback.length > 0) setFeedbackSent(true);
-
-      setOrder({
-        id: o.id,
-        order_number: o.order_number,
-        table_number: o.table_number,
-        status: o.status,
-        subtotal: Number(o.subtotal),
-        tax: Number(o.tax),
-        total: Number(o.total),
-        notes: o.notes,
-        created_at: o.created_at,
-        branch_id: o.branch_id,
-        items: items || [],
-        payment: payment || null,
-        branch: {
-          name: (o as any).branches?.name || "",
-          org_name: (o as any).branches?.organizations?.name || "",
-        },
+  const sendFeedback = useMutation({
+    mutationFn: async () => {
+      if (rating < 1) { toast.error("Please select a rating"); return; }
+      const { error } = await supabase.from("feedback").insert({
+        order_id: orderId,
+        branch_id: order?.branch_id,
+        rating,
+        comment: comment || null,
       });
-      setLoading(false);
-    }
-    load();
-  }, [orderId, supabase]);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setFeedbackSent(true);
+      toast.success("Thank you for your feedback!");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
 
-  const submitFeedback = async () => {
-    if (rating === 0) { toast.error("Please select a rating"); return; }
-    setSendingFeedback(true);
-    const { error } = await supabase.from("feedback").insert({
-      order_id: orderId,
-      branch_id: order?.branch_id || null,
-      rating,
-      comment: comment || null,
-    });
-    if (error) toast.error(error.message);
-    else { setFeedbackSent(true); toast.success("Thank you for your feedback!"); }
-    setSendingFeedback(false);
+  const handleShare = async () => {
+    if (navigator.share) {
+      await navigator.share({
+        title: `Receipt #${order?.order_number}`,
+        text: `Order total: ${formatCurrency(Number(order?.total))}`,
+        url: window.location.href,
+      });
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      toast.success("Link copied!");
+    }
   };
 
-  if (loading) {
+  if (isLoading || !order) {
     return (
-      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center p-4">
-        <Skeleton className="h-96 w-80" />
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
-  if (!order) {
-    return (
-      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center p-4">
-        <p className="text-sm text-zinc-500">Order not found</p>
-      </div>
-    );
-  }
+  const orgName = (order as any).branches?.organizations?.name || "Restaurant";
+  const branchName = (order as any).branches?.name || "";
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center p-4">
-      <Card className="max-w-sm w-full border-zinc-200 dark:border-zinc-800">
-        <CardContent className="p-5">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-sm"
+      >
+        <Card className="border-border shadow-xl overflow-hidden">
           {/* Header */}
-          <div className="text-center mb-4">
-            <div className="h-10 w-10 rounded-full bg-teal-100 dark:bg-teal-900 flex items-center justify-center mx-auto mb-2">
-              <Receipt className="h-5 w-5 text-teal-500" />
+          <div className="bg-primary/5 p-5 text-center border-b border-border">
+            <div className="mx-auto h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
+              <UtensilsCrossed className="h-6 w-6 text-primary" />
             </div>
-            <h1 className="font-bold font-poppins">{order.branch.org_name}</h1>
-            <p className="text-[10px] text-zinc-500">{order.branch.name} · Table {order.table_number || "—"}</p>
-            <p className="text-[10px] text-zinc-400">#{order.order_number} · {formatDate(order.created_at)}</p>
+            <h1 className="text-lg font-bold">{orgName}</h1>
+            <p className="text-xs text-muted-foreground">{branchName}</p>
           </div>
 
-          {/* Status */}
-          <div className="flex justify-center gap-2 mb-4">
-            <Badge className="bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300 text-[10px]">
-              {ORDER_STATUS_LABELS[order.status as keyof typeof ORDER_STATUS_LABELS] || order.status}
-            </Badge>
-            {order.payment && (
-              <Badge className={`text-[10px] ${order.payment.status === "completed" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
-                {PAYMENT_STATUS_LABELS[order.payment.status] || order.payment.status} · {order.payment.method.toUpperCase()}
-              </Badge>
-            )}
-          </div>
-
-          <Separator className="mb-3" />
-
-          {/* Items */}
-          <div className="space-y-1.5 mb-3">
-            {order.items.map((item, i) => (
-              <div key={i} className="flex justify-between text-xs">
-                <span>{item.quantity}× {item.dish_name}</span>
-                <span>{formatCurrency(Number(item.price_at_order) * item.quantity)}</span>
-              </div>
-            ))}
-          </div>
-
-          <Separator className="mb-3" />
-
-          {/* Totals */}
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs text-zinc-500">
-              <span>Subtotal</span>
-              <span>{formatCurrency(order.subtotal)}</span>
-            </div>
-            {order.tax > 0 && (
-              <div className="flex justify-between text-xs text-zinc-500">
-                <span>Tax</span>
-                <span>{formatCurrency(order.tax)}</span>
-              </div>
-            )}
-            <Separator />
-            <div className="flex justify-between text-sm font-bold">
-              <span>Total</span>
-              <span className="text-teal-600">{formatCurrency(order.total)}</span>
-            </div>
-          </div>
-
-          {/* Feedback */}
-          <div className="mt-6 pt-4 border-t">
-            {feedbackSent ? (
-              <div className="text-center">
-                <CheckCircle2 className="h-6 w-6 text-teal-500 mx-auto mb-1" />
-                <p className="text-xs text-zinc-500">Thanks for your feedback!</p>
-              </div>
-            ) : (
+          <CardContent className="p-5 space-y-4">
+            {/* Order info */}
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium text-center mb-2">Rate your experience</p>
-                <div className="flex justify-center gap-1 mb-3">
-                  {[1, 2, 3, 4, 5].map(s => (
-                    <button key={s} onClick={() => setRating(s)} className="focus:outline-none">
-                      <Star className={`h-6 w-6 transition-colors ${s <= rating ? "fill-teal-500 text-teal-500" : "text-zinc-300"}`} />
+                <p className="text-xs text-muted-foreground">Order Number</p>
+                <p className="text-sm font-bold text-primary">#{order.order_number}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground">Date</p>
+                <p className="text-xs font-medium">
+                  {new Date(order.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </p>
+              </div>
+            </div>
+
+            {order.table_number && (
+              <Badge variant="outline" className="text-xs">Table {order.table_number}</Badge>
+            )}
+
+            <Separator />
+
+            {/* Items */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Items</h3>
+              {order.order_items?.map((item: any) => (
+                <div key={item.id} className="flex justify-between text-sm">
+                  <span className="flex-1">
+                    <span className="font-medium">{item.quantity}×</span>{" "}
+                    {item.dish_name}
+                  </span>
+                  <span className="font-medium shrink-0 ml-3">{formatCurrency(item.quantity * Number(item.price_at_order))}</span>
+                </div>
+              ))}
+            </div>
+
+            <Separator />
+
+            {/* Totals */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span>{formatCurrency(Number(order.subtotal))}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Tax</span>
+                <span>{formatCurrency(Number(order.tax))}</span>
+              </div>
+              {Number(order.discount) > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Discount</span>
+                  <span className="text-green-600">-{formatCurrency(Number(order.discount))}</span>
+                </div>
+              )}
+              <Separator />
+              <div className="flex justify-between text-base font-bold">
+                <span>Total</span>
+                <span className="text-primary">{formatCurrency(Number(order.total))}</span>
+              </div>
+            </div>
+
+            {/* Status */}
+            <div className="flex justify-center">
+              <Badge className="text-xs capitalize">{order.status}</Badge>
+            </div>
+
+            <Separator />
+
+            {/* Feedback */}
+            {!feedbackSent ? (
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold text-center">How was your experience?</h3>
+                <div className="flex justify-center gap-1.5">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <button key={s} onClick={() => setRating(s)} className="p-1 transition-transform hover:scale-110">
+                      <Star
+                        className={`h-7 w-7 transition-colors ${s <= rating ? "fill-amber-400 text-amber-400" : "text-muted"}`}
+                      />
                     </button>
                   ))}
                 </div>
-                <Textarea
-                  className="text-xs min-h-[50px] mb-2"
-                  placeholder="Any comments? (optional)"
-                  value={comment}
-                  onChange={e => setComment(e.target.value)}
-                />
-                <Button
-                  className="w-full bg-teal-500 hover:bg-teal-600 text-white h-8 text-xs"
-                  onClick={submitFeedback}
-                  disabled={sendingFeedback}
-                >
-                  {sendingFeedback && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-                  Submit Feedback
-                </Button>
+                {rating > 0 && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-2">
+                    <Textarea
+                      className="text-xs min-h-[60px] rounded-xl"
+                      placeholder="Tell us more (optional)..."
+                      value={comment}
+                      onChange={e => setComment(e.target.value)}
+                    />
+                    <Button size="sm" className="w-full h-9 text-xs" onClick={() => sendFeedback.mutate()} disabled={sendFeedback.isPending}>
+                      {sendFeedback.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Send className="h-3.5 w-3.5 mr-1.5" />}
+                      Submit Feedback
+                    </Button>
+                  </motion.div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-3">
+                <p className="text-sm font-medium text-green-600 dark:text-green-400">Thank you for your feedback! 🙏</p>
               </div>
             )}
-          </div>
-        </CardContent>
-      </Card>
+
+            {/* Share */}
+            <Button variant="outline" size="sm" className="w-full h-9 text-xs" onClick={handleShare}>
+              <Share2 className="h-3.5 w-3.5 mr-1.5" /> Share Receipt
+            </Button>
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   );
 }
