@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getOrdersWithItems } from "@/lib/supabase/queries";
 import type { OrderItemStatus, OrderStatus } from "@/lib/constants";
@@ -11,19 +11,43 @@ export function useRealtimeOrders(branchId?: string | null) {
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const activeRef = useRef(true);
+  const branchRef = useRef<string | null | undefined>(branchId);
+  const inFlightRef = useRef(false);
+  const queuedRefreshRef = useRef(false);
 
   const refresh = useCallback(async () => {
-    if (!branchId) return;
-    try {
-      setLoading(true);
-      setError(null);
-      setOrders(await getOrdersWithItems(supabase, branchId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load orders");
-    } finally {
+    const currentBranchId = branchRef.current;
+    if (!currentBranchId) {
+      setOrders([]);
       setLoading(false);
+      return;
     }
-  }, [branchId, supabase]);
+
+    if (inFlightRef.current) {
+      queuedRefreshRef.current = true;
+      return;
+    }
+
+    inFlightRef.current = true;
+    try {
+      if (activeRef.current) {
+        setLoading(true);
+        setError(null);
+      }
+      const nextOrders = await getOrdersWithItems(supabase, currentBranchId);
+      if (activeRef.current && branchRef.current === currentBranchId) setOrders(nextOrders);
+    } catch (err) {
+      if (activeRef.current) setError(err instanceof Error ? err.message : "Unable to load orders");
+    } finally {
+      inFlightRef.current = false;
+      if (activeRef.current) setLoading(false);
+      if (activeRef.current && queuedRefreshRef.current) {
+        queuedRefreshRef.current = false;
+        void refresh();
+      }
+    }
+  }, [supabase]);
 
   const applyStatusUpdate = useCallback((orderId: string, status: OrderStatus, itemStatus?: OrderItemStatus | null) => {
     setOrders((current) =>
@@ -40,8 +64,14 @@ export function useRealtimeOrders(branchId?: string | null) {
   }, []);
 
   useEffect(() => {
+    activeRef.current = true;
+    branchRef.current = branchId;
+    queuedRefreshRef.current = false;
     void refresh();
-  }, [refresh]);
+    return () => {
+      activeRef.current = false;
+    };
+  }, [branchId, refresh]);
 
   useEffect(() => {
     if (!branchId) return;

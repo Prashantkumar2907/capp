@@ -1,27 +1,21 @@
 # Loop 6 Report
 
 ## What was inspected
-- Reviewed App Router route grouping, dashboard order and kitchen pages, shared realtime order hook, order-card UI, status API route, Supabase schema/RLS, seed data, docs, and existing unit/API/UI tests.
-- Focused inspection on kitchen, waiter, cashier, and manager order lifecycle paths because order status transitions affect service reliability, payment trust boundaries, table availability, and staff permissions.
+- `useRealtimeOrders`, kitchen/orders realtime subscriptions, order-board refresh behavior, branch switching cleanup, kitchen route protection, API contracts, and UI regression tests.
 
 ## What was missing or weak
-- `/api/orders/[orderId]/status` used the service-role client directly without staff auth, branch scoping, or role checks.
-- The client could send `itemStatus`, allowing browser-side trust over kitchen item state.
-- Any order status could be requested, including terminal or payment-owned states.
-- Served orders were releasing tables before payment, which could show tables as available while guests were still dining.
-- Dashboard clients refreshed after status PATCH even though realtime subscriptions can also refresh, creating avoidable duplicate fetch behavior.
+- Realtime order and order-item events could trigger overlapping `getOrdersWithItems` requests.
+- The hook did not explicitly guard against stale branch responses applying after branch changes.
+- Cleanup existed for Supabase channels, but state updates after unmount/branch changes were not guarded.
 
 ## What was implemented
-- Added a trusted order-status service that validates active staff, branch access, role permissions, allowed lifecycle transitions, idempotent retries, and payment-aware cancellation.
-- Centralized operational order statuses and item statuses in shared constants and validation schemas.
-- Rebuilt the order status API route with UUID validation, JSON validation, consistent API errors, and server-derived item status.
-- Updated kitchen and orders pages to send only trusted order status and patch local cached state from the API response.
-- Updated payment settlement/webhook handling to release tables only after completed payment when no active orders remain for the table.
+- Added in-flight refresh coalescing with `inFlightRef` and `queuedRefreshRef`.
+- Added `branchRef` and `activeRef` guards so stale branch responses do not overwrite the current board.
+- Preserved Supabase channel cleanup and added tests that lock in refresh coalescing and branch cleanup behavior.
 
 ## File-structure or architecture changes made
-- Added `src/lib/supabase/order-status.ts` for shared server-side lifecycle logic.
-- Kept API boundary in `src/app/api/orders/[orderId]/status/route.ts`.
-- Kept UI changes in route components and reusable realtime hook without moving business logic into pages.
+- Kept realtime client behavior in `src/hooks/use-realtime-orders.ts`.
+- Added focused coverage in `tests/unit/realtime-orders.test.ts`.
 
 ## Tests run
 - `npm run lint`
@@ -29,42 +23,36 @@
 - `npm run build`
 - `npm run test`
 - `npm run test:api`
-- `npm run test:ui` with `NEXT_PUBLIC_APP_URL=http://localhost:3100` and `PORT=3100`
+- `npm run test:ui`
 - `npm audit --audit-level=moderate`
-- `npm run db:migrate`
+- `npm run db:migrate` skipped destructive reset because the configured database is not local.
 - `npm run db:verify`
 
 ## Demo data or personas used
-- Exercised kitchen staff progression rules, waiter serve/cancel rules, manager terminal-state protection, and cashier/payment table-release behavior through unit and API contracts.
-- Demo restaurant coverage remains the four seeded personas from loop 3: tea shop, casual dining, multi-branch enterprise, and cloud kitchen.
+- Kitchen workflow was exercised through route protection and realtime hook coverage.
+- Manual browser QA confirmed `/dashboard/kitchen` redirects signed-out users to `/sign-in?redirect=%2Fdashboard%2Fkitchen`.
 
 ## Skeleton states added or verified
-- Verified existing dashboard shell and public QR skeleton tests still pass at desktop, tablet, and mobile widths.
-- Confirmed changed kitchen/orders flows keep their board skeletons and empty/error branches intact.
+- Kitchen route-level board skeleton from loop 4 remained covered by loading-route tests.
+- Public QR skeleton replacement was reverified by the UI suite.
 
 ## Readability/code-quality cleanup performed
-- Removed duplicated `statusToItemStatus` helpers from client pages.
-- Replaced client-trusted item status with `itemStatusForOrderStatus`.
-- Added pure transition helpers with targeted unit tests.
+- Made refresh concurrency explicit with named refs.
+- Kept the hook API unchanged for kitchen and orders pages.
 
 ## UI/UX and animation checks performed
-- Verified status actions remain disabled while busy.
-- Verified local cache patching moves tickets without an extra explicit board refetch.
-- Existing responsive UI tests confirmed no horizontal overflow on the primary public flow across desktop, tablet, and mobile.
+- Existing kitchen/order board UI remains unchanged while reducing background refresh churn.
+- Browser QA reported no console errors or warnings on the protected kitchen redirect.
 
 ## API/query/security checks performed
-- Confirmed malformed IDs and invalid payloads are rejected before auth or database work.
-- Confirmed staff role, branch, tenant, transition, and settled-payment checks are server-side.
-- Confirmed the client no longer submits item status.
-- Checked table release behavior now waits for cancellation or completed payment and avoids releasing when another active order exists for the same table.
+- Realtime refreshes now coalesce instead of creating avoidable duplicate reads on event bursts.
+- Branch changes are guarded so a late response from one branch cannot populate another branch's board.
 
 ## Accessibility, performance, reliability, and production-readiness checks performed
-- Preserved visible button disabled states, semantic headings, and existing skeleton/empty/error state patterns.
-- Reduced duplicate fetch risk after status updates by applying trusted API response data to cached realtime state.
-- Added conflict handling for concurrent status updates by matching the previous order status during update.
-- Kept webhook/payment retry behavior compatible with idempotent table release.
+- Fewer overlapping requests improves hot-path kitchen reliability during busy service.
+- Cleanup remains explicit through `supabase.removeChannel(channel)`.
+- No new secrets or PII exposure was introduced.
 
 ## Remaining risks
-- Order status and item status updates still span multiple Supabase calls rather than a single database transaction/RPC.
-- Authenticated dashboard role QA still depends on having seeded Supabase Auth users, not only staff rows.
-- More granular cancellation/refund policy UI is still needed for managers and cashiers.
+- Authenticated kitchen role browser testing still requires temporary demo auth users.
+- Realtime event payloads still trigger full refreshes; a future pass could patch rows incrementally for lower latency.
