@@ -44,6 +44,17 @@ export default function AnalyticsPage() {
     );
   }
 
+  if (summary.error) {
+    return (
+      <div className="space-y-5">
+        <PageHeader title="Analytics" description="Revenue, throughput, sources, and menu signals for better decisions." />
+        <Card>
+          <CardContent className="p-6 text-sm text-destructive">Unable to load analytics. Try refreshing the page.</CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   const data = summary.data;
   const revenueData = data?.dailyRevenue ?? [];
   const statusData = data?.statusCounts ?? [];

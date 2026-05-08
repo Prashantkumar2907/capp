@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DishTile } from "@/components/features/menu/dish-tile";
 import { CartPanel } from "@/components/features/cart/cart-panel";
+import { EmptyState } from "@/components/shared/empty-state";
 import { calculateTotals } from "@/lib/utils";
 import { useHasMounted } from "@/hooks/use-has-mounted";
 import { useCartStore } from "@/stores/cart-store";
@@ -135,7 +136,7 @@ export default function PublicOrderPage() {
             <Card>
               <CardContent className="p-8 text-sm text-destructive">{menu.error.message}</CardContent>
             </Card>
-          ) : (
+          ) : dishes.length ? (
             <div className="grid gap-3 md:grid-cols-2">
               {dishes.map((dish) => (
                 <DishTile
@@ -147,6 +148,8 @@ export default function PublicOrderPage() {
                 />
               ))}
             </div>
+          ) : (
+            <EmptyState icon={Search} title="No dishes found" description="Try another search or category." />
           )}
         </section>
         <aside className="hidden xl:block">

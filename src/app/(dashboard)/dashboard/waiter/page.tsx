@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Armchair, Search, Send, ShoppingBag, Table2 } from "lucide-react";
+import { AlertCircle, Armchair, Search, Send, ShoppingBag, Table2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
+import { EmptyState } from "@/components/shared/empty-state";
 import { DishTile } from "@/components/features/menu/dish-tile";
 import { CartPanel } from "@/components/features/cart/cart-panel";
 import { createClient } from "@/lib/supabase/client";
@@ -183,7 +184,9 @@ export default function WaiterPage() {
                 <Skeleton key={index} className="h-32" />
               ))}
             </div>
-          ) : (
+          ) : menu.error ? (
+            <EmptyState icon={AlertCircle} title="Menu could not be loaded" description={menu.error.message} />
+          ) : visibleDishes.length ? (
             <div className="grid gap-3 md:grid-cols-2">
               {visibleDishes.map((dish) => (
                 <DishTile
@@ -195,6 +198,8 @@ export default function WaiterPage() {
                 />
               ))}
             </div>
+          ) : (
+            <EmptyState icon={Search} title="No dishes found" description="Adjust the search or category filter." />
           )}
         </section>
         <aside className="space-y-3">

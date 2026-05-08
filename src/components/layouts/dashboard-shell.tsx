@@ -191,7 +191,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
-        <main className="scrollable-inner p-3 md:p-5 3xl:p-7">{children}</main>
+        <main className="scrollable-inner p-3 md:p-5 3xl:p-7">
+          <div key={pathname} className="animate-soft-rise">
+            {children}
+          </div>
+        </main>
         <nav className="grid h-16 shrink-0 grid-cols-5 border-t bg-card lg:hidden">
           {visibleNav.slice(0, 4).map((item) => {
             const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
