@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { ReceiptSkeleton } from "@/components/ui/loading-patterns";
 import { OrderStatusBadge } from "@/components/shared/status-badge";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, formatDateTime, upiLink } from "@/lib/utils";
@@ -56,11 +57,7 @@ export default function ReceiptPage() {
   });
 
   if (receipt.isLoading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-background p-4">
-        <div className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-      </main>
-    );
+    return <ReceiptSkeleton />;
   }
 
   if (receipt.error || !receipt.data) {

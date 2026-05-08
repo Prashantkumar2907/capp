@@ -10,6 +10,14 @@ if (!databaseUrl) {
   throw new Error("Missing DATABASE_URL");
 }
 
+const databaseHost = new URL(databaseUrl).hostname;
+const allowDestructiveReset = process.env.ALLOW_DESTRUCTIVE_DB_RESET === "1" || isLocalDatabaseHost(databaseHost);
+
+if (!allowDestructiveReset) {
+  console.log("Skipping destructive database reset for non-local DATABASE_URL. Set ALLOW_DESTRUCTIVE_DB_RESET=1 only for disposable demo databases.");
+  process.exit(0);
+}
+
 const sqlDir = path.join(process.cwd(), "supabase");
 const files = (await fs.readdir(sqlDir)).filter((file) => file.endsWith(".sql")).sort();
 const client = new Client(pgConfig(databaseUrl));
@@ -40,4 +48,8 @@ function pgConfig(connectionString) {
     connectionString,
     ssl: host.endsWith(".pooler.supabase.com") ? { rejectUnauthorized: false } : undefined,
   };
+}
+
+function isLocalDatabaseHost(host) {
+  return ["localhost", "127.0.0.1", "::1"].includes(host);
 }

@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn, initials } from "@/lib/utils";
 import { roleLabels, type Role } from "@/lib/constants";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -60,8 +61,46 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   if (loading || !user || !staff || !role) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      <div className="flex min-h-screen bg-background">
+        <aside className="hidden w-[260px] shrink-0 border-r bg-sidebar p-4 lg:block">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-10 w-10" />
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+          </div>
+          <div className="mt-8 space-y-2">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <Skeleton key={index} className="h-10 w-full" />
+            ))}
+          </div>
+        </aside>
+        <section className="flex min-w-0 flex-1 flex-col">
+          <header className="flex h-16 shrink-0 items-center justify-between border-b px-4">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-3 w-44" />
+            </div>
+            <div className="flex gap-2">
+              <Skeleton className="h-9 w-20" />
+              <Skeleton className="h-9 w-9" />
+              <Skeleton className="h-9 w-9" />
+            </div>
+          </header>
+          <main className="space-y-5 p-3 md:p-5">
+            <Skeleton className="h-12 w-80 max-w-full" />
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <Skeleton key={index} className="h-24" />
+              ))}
+            </div>
+            <div className="grid gap-4 xl:grid-cols-2">
+              <Skeleton className="h-96" />
+              <Skeleton className="h-96" />
+            </div>
+          </main>
+        </section>
       </div>
     );
   }

@@ -35,9 +35,7 @@ export const useCartStore = create<CartState>()(
         const state = get();
         if (state.branchId !== branchId || state.tableNumber !== tableNumber) {
           set({ branchId, tableNumber, items: [] });
-          return;
         }
-        set({ branchId, tableNumber });
       },
       addItem: (item) => {
         const quantity = item.quantity ?? 1;
