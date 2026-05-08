@@ -1,5 +1,6 @@
 import { createHmac, createHash, timingSafeEqual } from "crypto";
 import { createAdminSupabase } from "@/lib/supabase/admin";
+import { releaseTableWhenIdle } from "@/lib/supabase/order-status";
 import { getActiveStaffContext } from "@/lib/supabase/permissions";
 import type { PaymentSettlementInput } from "@/lib/validation/schemas";
 import type { Json, Payment, Staff } from "@/types/database";
@@ -8,7 +9,7 @@ type PaymentMutationResult =
   | { ok: true; payment?: Payment; duplicate?: boolean; ignored?: boolean }
   | { ok: false; status: number; code: string; message: string };
 
-type PaymentWithOrder = Payment & { orders: { status: string; branch_id: string } | null };
+type PaymentWithOrder = Payment & { orders: { status: string; branch_id: string; table_number: number | null } | null };
 
 export type RazorpayEvent = {
   event: string;
@@ -37,7 +38,7 @@ export async function settlePayment(paymentId: string, input: PaymentSettlementI
 
   const { data: existing } = await admin
     .from("payments")
-    .select("*, orders(status, branch_id)")
+    .select("*, orders(status, branch_id, table_number)")
     .eq("id", paymentId)
     .maybeSingle();
 
@@ -58,11 +59,17 @@ export async function settlePayment(paymentId: string, input: PaymentSettlementI
 
   if (error || !updated) return failure(400, "PAYMENT_UPDATE_FAILED", "Unable to update payment");
 
-  await admin
+  const { data: updatedOrder } = await admin
     .from("orders")
     .update({ status: input.status === "completed" ? "paid" : "failed" })
     .eq("id", payment.order_id)
-    .eq("branch_id", payment.branch_id);
+    .eq("branch_id", payment.branch_id)
+    .select("id, branch_id, table_number")
+    .single();
+
+  if (input.status === "completed" && updatedOrder) {
+    await releaseTableWhenIdle(admin, updatedOrder);
+  }
 
   return { ok: true, payment: updated };
 }
@@ -115,11 +122,17 @@ export async function processRazorpayWebhook(event: RazorpayEvent, rawBody: stri
 
   const updated = (updatedPayments ?? [])[0] as Payment | undefined;
   if (updated) {
-    await admin
+    const { data: updatedOrder } = await admin
       .from("orders")
       .update({ status: status === "completed" ? "paid" : status === "failed" ? "failed" : "pending" })
       .eq("id", updated.order_id)
-      .eq("branch_id", updated.branch_id);
+      .eq("branch_id", updated.branch_id)
+      .select("id, branch_id, table_number")
+      .single();
+
+    if (status === "completed" && updatedOrder) {
+      await releaseTableWhenIdle(admin, updatedOrder);
+    }
   }
 
   await markWebhookEvent(webhookEvent.id, updated ? "processed" : "ignored");

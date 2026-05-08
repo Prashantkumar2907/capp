@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getOrdersWithItems } from "@/lib/supabase/queries";
+import type { OrderItemStatus, OrderStatus } from "@/lib/constants";
 import type { OrderWithItems } from "@/types/database";
 
 export function useRealtimeOrders(branchId?: string | null) {
@@ -24,6 +25,20 @@ export function useRealtimeOrders(branchId?: string | null) {
     }
   }, [branchId, supabase]);
 
+  const applyStatusUpdate = useCallback((orderId: string, status: OrderStatus, itemStatus?: OrderItemStatus | null) => {
+    setOrders((current) =>
+      current.map((order) =>
+        order.id === orderId
+          ? {
+              ...order,
+              status,
+              order_items: itemStatus ? order.order_items.map((item) => ({ ...item, status: itemStatus })) : order.order_items,
+            }
+          : order
+      )
+    );
+  }, []);
+
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -42,5 +57,5 @@ export function useRealtimeOrders(branchId?: string | null) {
     };
   }, [branchId, refresh, supabase]);
 
-  return { orders, loading, error, refresh };
+  return { orders, loading, error, refresh, applyStatusUpdate };
 }

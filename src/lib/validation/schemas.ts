@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { roles } from "@/lib/constants";
+import { operationalOrderStatuses, roles } from "@/lib/constants";
 
 export const dbUuidSchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "Invalid UUID");
 
@@ -95,6 +95,10 @@ export const paymentSettlementSchema = z.object({
   status: z.enum(["completed", "failed"]),
 });
 
+export const orderStatusUpdateSchema = z.object({
+  status: z.enum(operationalOrderStatuses),
+});
+
 export type SignInInput = z.infer<typeof signInSchema>;
 export type SignUpInput = z.infer<typeof signUpSchema>;
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
@@ -103,3 +107,4 @@ export type BranchUpdateInput = z.infer<typeof branchUpdateSchema>;
 export type StaffInput = z.infer<typeof staffSchema>;
 export type StaffUpdateInput = z.infer<typeof staffUpdateSchema>;
 export type PaymentSettlementInput = z.infer<typeof paymentSettlementSchema>;
+export type OrderStatusUpdateInput = z.infer<typeof orderStatusUpdateSchema>;

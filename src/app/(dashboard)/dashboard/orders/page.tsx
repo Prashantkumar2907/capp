@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { OrderCard } from "@/components/features/orders/order-card";
-import { orderStatuses, orderStatusLabels, type OrderStatus } from "@/lib/constants";
+import { orderStatuses, orderStatusLabels, type OrderItemStatus, type OrderStatus } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -22,7 +22,7 @@ type SourceFilter = "all" | "waiter" | "qr_customer" | "cashier";
 export default function OrdersPage() {
   const { branch } = useAuth();
   const queryClient = useQueryClient();
-  const { orders, loading, error, refresh } = useRealtimeOrders(branch?.id);
+  const { orders, loading, error, refresh, applyStatusUpdate } = useRealtimeOrders(branch?.id);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<OrderStatus | "all">("all");
   const [source, setSource] = useState<SourceFilter>("all");
@@ -54,11 +54,11 @@ export default function OrdersPage() {
       const response = await fetch(`/api/orders/${orderId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus, itemStatus: statusToItemStatus(nextStatus) }),
+        body: JSON.stringify({ status: nextStatus }),
       });
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as { error?: string; order?: { id: string; status: OrderStatus }; itemStatus?: OrderItemStatus | null };
       if (!response.ok) throw new Error(payload.error ?? "Unable to update order");
-      await refresh();
+      if (payload.order) applyStatusUpdate(payload.order.id, payload.order.status, payload.itemStatus);
       await queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
       toast.success("Order updated");
     } catch (err) {
@@ -125,13 +125,4 @@ export default function OrdersPage() {
       )}
     </div>
   );
-}
-
-function statusToItemStatus(status: OrderStatus) {
-  if (status === "confirmed") return "accepted";
-  if (status === "served") return "served";
-  if (status === "cancelled") return "cancelled";
-  if (status === "ready") return "ready";
-  if (status === "preparing") return "preparing";
-  return "pending";
 }

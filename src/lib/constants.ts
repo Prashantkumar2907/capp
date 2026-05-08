@@ -13,6 +13,10 @@ export const roleLabels: Record<Role, string> = {
 
 export const orderStatuses = ["pending", "confirmed", "preparing", "ready", "served", "paid", "cancelled", "refunded", "failed"] as const;
 
+export const operationalOrderStatuses = ["pending", "confirmed", "preparing", "ready", "served", "cancelled"] as const;
+
+export const orderItemStatuses = ["pending", "accepted", "preparing", "ready", "served", "cancelled"] as const;
+
 export const orderStatusLabels: Record<OrderStatus, string> = {
   pending: "Pending",
   confirmed: "Confirmed",
@@ -33,6 +37,8 @@ export const paymentStatuses = ["pending", "completed", "failed", "refunded"] as
 
 export type Role = (typeof roles)[number];
 export type OrderStatus = (typeof orderStatuses)[number];
+export type OperationalOrderStatus = (typeof operationalOrderStatuses)[number];
+export type OrderItemStatus = (typeof orderItemStatuses)[number];
 export type PaymentMethod = (typeof paymentMethods)[number];
 export type PaymentStatus = (typeof paymentStatuses)[number];
 

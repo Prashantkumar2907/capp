@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { OrderStatusBadge } from "@/components/shared/status-badge";
-import { orderStatusLabels, type OrderStatus } from "@/lib/constants";
+import { orderStatusLabels, type OrderItemStatus, type OrderStatus } from "@/lib/constants";
 import { timeAgo } from "@/lib/utils";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -24,7 +24,7 @@ const columns: Array<{ key: OrderStatus; title: string; action?: OrderStatus; ac
 
 export default function KitchenPage() {
   const { branch } = useAuth();
-  const { orders, loading, error, refresh } = useRealtimeOrders(branch?.id);
+  const { orders, loading, error, refresh, applyStatusUpdate } = useRealtimeOrders(branch?.id);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const kitchenOrders = useMemo(() => orders.filter((order) => ["pending", "confirmed", "preparing", "ready"].includes(order.status)), [orders]);
@@ -37,11 +37,11 @@ export default function KitchenPage() {
       const response = await fetch(`/api/orders/${order.id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status, itemStatus: statusToItemStatus(status) }),
+        body: JSON.stringify({ status }),
       });
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as { error?: string; order?: { id: string; status: OrderStatus }; itemStatus?: OrderItemStatus | null };
       if (!response.ok) throw new Error(payload.error ?? "Unable to update ticket");
-      await refresh();
+      if (payload.order) applyStatusUpdate(payload.order.id, payload.order.status, payload.itemStatus);
       toast.success(`Order ${orderStatusLabels[status].toLowerCase()}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to update ticket");
@@ -135,13 +135,4 @@ export default function KitchenPage() {
       )}
     </div>
   );
-}
-
-function statusToItemStatus(status: OrderStatus) {
-  if (status === "confirmed") return "accepted";
-  if (status === "preparing") return "preparing";
-  if (status === "ready") return "ready";
-  if (status === "served") return "served";
-  if (status === "cancelled") return "cancelled";
-  return "pending";
 }

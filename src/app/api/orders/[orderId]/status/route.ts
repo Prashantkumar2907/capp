@@ -1,42 +1,29 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { createAdminSupabase } from "@/lib/supabase/admin";
-import { orderStatuses, type OrderStatus } from "@/lib/constants";
+import type { NextRequest } from "next/server";
+import { apiError, apiOk, apiValidationError } from "@/lib/api/responses";
+import { transitionOrderStatus } from "@/lib/supabase/order-status";
+import { dbUuidSchema, orderStatusUpdateSchema } from "@/lib/validation/schemas";
 
 interface Params {
   params: Promise<{ orderId: string }>;
 }
 
-interface StatusBody {
-  status: OrderStatus;
-  itemStatus?: "pending" | "accepted" | "preparing" | "ready" | "served" | "cancelled";
-}
-
 export async function PATCH(request: NextRequest, { params }: Params) {
   const { orderId } = await params;
-  const body = (await request.json()) as StatusBody;
+  const id = dbUuidSchema.safeParse(orderId);
+  if (!id.success) return apiValidationError(id.error);
 
-  if (!orderStatuses.includes(body.status)) {
-    return NextResponse.json({ error: "Invalid order status" }, { status: 400 });
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return apiError("INVALID_JSON", "Request body must be valid JSON", 400);
   }
 
-  const admin = createAdminSupabase();
-  const { data: order, error } = await admin.from("orders").update({ status: body.status }).eq("id", orderId).select("*").single();
+  const parsed = orderStatusUpdateSchema.safeParse(body);
+  if (!parsed.success) return apiValidationError(parsed.error);
 
-  if (error || !order) {
-    return NextResponse.json({ error: error?.message ?? "Order not found" }, { status: 400 });
-  }
+  const result = await transitionOrderStatus(id.data, parsed.data.status);
+  if (!result.ok) return apiError(result.code, result.message, result.status);
 
-  if (body.itemStatus) {
-    await admin.from("order_items").update({ status: body.itemStatus }).eq("order_id", orderId);
-  }
-
-  if (body.status === "served" || body.status === "cancelled") {
-    await admin.from("tables").update({ status: "available" }).eq("branch_id", order.branch_id).eq("table_number", order.table_number ?? -1);
-  }
-
-  if (body.status === "confirmed" && order.table_number) {
-    await admin.from("tables").update({ status: "occupied" }).eq("branch_id", order.branch_id).eq("table_number", order.table_number);
-  }
-
-  return NextResponse.json({ ok: true, order });
+  return apiOk({ order: result.order, itemStatus: result.itemStatus, unchanged: result.unchanged });
 }
