@@ -10,7 +10,7 @@ CAPP is a production restaurant SaaS. Code should stay close to the route, featu
 
 `src/app/api` contains server-only API boundaries for public ordering, staff operations, health checks, webhooks, and integration callbacks. API routes must validate inputs, return consistent response shapes, avoid leaking provider details, and never trust client-supplied prices, totals, roles, payment state, or branch ownership.
 
-Every route that fetches data should include a `loading.tsx` skeleton matching the final layout and an error/empty state at the component or route level.
+Every route that fetches data should include a `loading.tsx` skeleton matching the final layout and an `error.tsx` or component-level error state that offers retry/recovery without rendering raw provider error details.
 
 ## Components
 
