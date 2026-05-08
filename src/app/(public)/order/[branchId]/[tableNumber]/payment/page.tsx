@@ -38,7 +38,8 @@ export default function PublicPaymentPage() {
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const hasMounted = useHasMounted();
-  const cartItems = hasMounted ? cart.items : [];
+  const cartReady = hasMounted && cart.hasHydrated;
+  const cartItems = cartReady ? cart.items : [];
 
   const meta = useQuery({
     queryKey: ["public-menu-meta", branchId, tableNumber],
@@ -58,7 +59,7 @@ export default function PublicPaymentPage() {
   );
 
   const submitOrder = async () => {
-    if (!cart.items.length || submittingRef.current || meta.isLoading || meta.error) return;
+    if (!cartReady || !cart.items.length || submittingRef.current || meta.isLoading || meta.error) return;
     submittingRef.current = true;
     setSubmitting(true);
     try {
@@ -135,7 +136,13 @@ export default function PublicPaymentPage() {
               <Field label="Order note">
                 <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Anything the kitchen should know" />
               </Field>
-              {!cartItems.length ? (
+              {!cartReady ? (
+                <div className="space-y-3 rounded-2xl border border-dashed p-4" aria-label="Loading saved cart">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-20 w-full" />
+                </div>
+              ) : !cartItems.length ? (
                 <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">Your cart is empty. Return to the menu to add dishes.</div>
               ) : null}
             </CardContent>
@@ -147,6 +154,7 @@ export default function PublicPaymentPage() {
           tax={totals.tax}
           total={totals.total}
           submitLabel="Place order"
+          loading={!cartReady}
           submitting={submitting}
           disabled={meta.isLoading || Boolean(meta.error)}
           onIncrement={(dishId) => {
@@ -160,7 +168,7 @@ export default function PublicPaymentPage() {
         />
       </div>
       <div className="fixed inset-x-0 bottom-0 border-t bg-card p-3 xl:hidden">
-        <Button className="w-full" disabled={!cartItems.length || submitting || meta.isLoading || Boolean(meta.error)} onClick={submitOrder}>
+        <Button className="w-full" disabled={!cartReady || !cartItems.length || submitting || meta.isLoading || Boolean(meta.error)} onClick={submitOrder}>
           <Send className="h-4 w-4" />
           {submitting ? "Sending..." : "Place order"}
         </Button>

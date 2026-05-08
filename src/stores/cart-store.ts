@@ -12,10 +12,12 @@ export interface CartItem {
 }
 
 interface CartState {
+  hasHydrated: boolean;
   branchId: string | null;
   tableNumber: number | null;
   submissionKey: string | null;
   items: CartItem[];
+  setHasHydrated: (hasHydrated: boolean) => void;
   setContext: (branchId: string, tableNumber: number) => void;
   ensureSubmissionKey: () => string;
   resetSubmissionKey: () => void;
@@ -31,10 +33,12 @@ interface CartState {
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
+      hasHydrated: false,
       branchId: null,
       tableNumber: null,
       submissionKey: null,
       items: [],
+      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
       setContext: (branchId, tableNumber) => {
         const state = get();
         if (state.branchId !== branchId || state.tableNumber !== tableNumber) {
@@ -84,7 +88,16 @@ export const useCartStore = create<CartState>()(
       count: () => get().items.reduce((sum, item) => sum + item.quantity, 0),
       subtotal: () => get().items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0),
     }),
-    { name: "capp-cart-v2" }
+    {
+      name: "capp-cart-v2",
+      partialize: (state) => ({
+        branchId: state.branchId,
+        tableNumber: state.tableNumber,
+        submissionKey: state.submissionKey,
+        items: state.items,
+      }),
+      onRehydrateStorage: () => (state) => state?.setHasHydrated(true),
+    }
   )
 );
 

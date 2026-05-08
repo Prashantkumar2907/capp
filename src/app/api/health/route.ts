@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { apiError, apiOk } from "@/lib/api/responses";
+import { safeServerLog } from "@/lib/logging";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 
 export async function GET() {
@@ -7,8 +8,9 @@ export async function GET() {
   const { error } = await supabase.from("organizations").select("id", { count: "exact", head: true });
 
   if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    safeServerLog("health_check_failed", { code: error.code ?? "unknown" });
+    return apiError("HEALTH_CHECK_FAILED", "Health check failed", 500);
   }
 
-  return NextResponse.json({ ok: true, latencyMs: Date.now() - started });
+  return apiOk({ latencyMs: Date.now() - started });
 }

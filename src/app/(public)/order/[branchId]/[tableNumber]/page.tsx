@@ -39,7 +39,8 @@ export default function PublicOrderPage() {
   const [categoryId, setCategoryId] = useState("all");
   const cart = useCartStore();
   const hasMounted = useHasMounted();
-  const cartItems = hasMounted ? cart.items : [];
+  const cartReady = hasMounted && cart.hasHydrated;
+  const cartItems = cartReady ? cart.items : [];
 
   useEffect(() => {
     if (branchId && tableNumber) cart.setContext(branchId, tableNumber);
@@ -153,6 +154,7 @@ export default function PublicOrderPage() {
             tax={totals.tax}
             total={totals.total}
             submitLabel="Review order"
+            loading={!cartReady}
             onIncrement={(dishId) => {
               const dish = menu.data?.dishes.find((item) => item.id === dishId);
               if (dish) addDish(dish);

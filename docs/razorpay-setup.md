@@ -36,3 +36,12 @@ When creating Razorpay orders, include one of these note fields:
 - `capp_payment_id`
 
 That lets the webhook map provider events back to CAPP records.
+
+## Reliability Requirements
+
+- Missing webhook secret fails closed in production setup.
+- Invalid signatures return `INVALID_SIGNATURE` before JSON parsing or database writes.
+- Event IDs are stored in `webhook_events` so provider retries are idempotent.
+- Duplicate event IDs return success without mutating payments again.
+- Failed, ignored, and processed webhook states should be monitored.
+- Do not log raw webhook secrets, payment credentials, or customer identifiers.

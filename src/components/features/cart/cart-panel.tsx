@@ -3,6 +3,7 @@
 import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/utils";
 import type { CartItem } from "@/stores/cart-store";
@@ -13,6 +14,7 @@ interface CartPanelProps {
   total?: number;
   tax?: number;
   submitLabel: string;
+  loading?: boolean;
   submitting?: boolean;
   disabled?: boolean;
   onIncrement: (dishId: string) => void;
@@ -22,7 +24,7 @@ interface CartPanelProps {
   onSubmit: () => void;
 }
 
-export function CartPanel({ items, subtotal, total, tax, submitLabel, submitting, disabled, onIncrement, onDecrement, onRemove, onNotes, onSubmit }: CartPanelProps) {
+export function CartPanel({ items, subtotal, total, tax, submitLabel, loading, submitting, disabled, onIncrement, onDecrement, onRemove, onNotes, onSubmit }: CartPanelProps) {
   return (
     <Card className="sticky top-4">
       <CardContent className="space-y-4 p-4">
@@ -35,7 +37,20 @@ export function CartPanel({ items, subtotal, total, tax, submitLabel, submitting
             <ShoppingBag className="h-5 w-5" />
           </div>
         </div>
-        {items.length ? (
+        {loading ? (
+          <div className="space-y-3" aria-label="Loading cart">
+            {Array.from({ length: 2 }).map((_, index) => (
+              <div key={index} className="space-y-3 rounded-2xl border bg-card p-3">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-3 w-24" />
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-9 w-28 rounded-full" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : items.length ? (
           <div className="max-h-[46vh] space-y-3 overflow-y-auto pr-1">
             {items.map((item) => (
               <div key={item.dish_id} className="space-y-2 rounded-2xl border bg-card p-3">
@@ -68,23 +83,33 @@ export function CartPanel({ items, subtotal, total, tax, submitLabel, submitting
           <div className="rounded-2xl border border-dashed p-8 text-center text-xs text-muted-foreground">Your cart is empty.</div>
         )}
         <div className="space-y-2 rounded-2xl bg-secondary p-3 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Subtotal</span>
-            <span className="font-numbers">{formatCurrency(subtotal)}</span>
-          </div>
-          {typeof tax === "number" ? (
+          {loading ? (
+            <>
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
+              <Skeleton className="h-5 w-full" />
+            </>
+          ) : (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="font-numbers">{formatCurrency(subtotal)}</span>
+            </div>
+          )}
+          {!loading && typeof tax === "number" ? (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Taxes</span>
               <span className="font-numbers">{formatCurrency(tax)}</span>
             </div>
           ) : null}
-          <div className="flex justify-between border-t pt-2 font-semibold">
-            <span>Total</span>
-            <span className="font-numbers">{formatCurrency(total ?? subtotal)}</span>
-          </div>
+          {!loading ? (
+            <div className="flex justify-between border-t pt-2 font-semibold">
+              <span>Total</span>
+              <span className="font-numbers">{formatCurrency(total ?? subtotal)}</span>
+            </div>
+          ) : null}
         </div>
-        <Button className="w-full" disabled={disabled || !items.length || submitting} onClick={onSubmit}>
-          {submitting ? "Working..." : submitLabel}
+        <Button className="w-full" disabled={loading || disabled || !items.length || submitting} onClick={onSubmit}>
+          {loading ? "Loading order..." : submitting ? "Working..." : submitLabel}
         </Button>
       </CardContent>
     </Card>

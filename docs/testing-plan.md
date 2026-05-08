@@ -6,6 +6,7 @@
 npm run typecheck
 npm run lint
 npm run build
+npm run audit:moderate
 ```
 
 ## Unit Tests
@@ -41,6 +42,17 @@ npm run test:ui
 
 Playwright starts the local Next.js app, checks the landing page, auth form, and runs desktop plus mobile projects.
 
+The configured projects cover desktop, tablet, and mobile widths. Public QR tests verify delayed skeleton replacement, duplicate-click order submission, trusted order payload shape, and reduced-motion scroll behavior.
+
+## Aggregate Checks
+
+```bash
+npm run verify
+npm run verify:ci
+```
+
+`verify` runs lint, typecheck, build, unit tests, API tests, UI tests, and moderate audit. `verify:ci` also runs database verification.
+
 ## Manual Role QA
 
 1. Owner signs up, completes onboarding, and checks dashboard, branches, staff, menu, tables, analytics, settings.
@@ -50,3 +62,5 @@ Playwright starts the local Next.js app, checks the landing page, auth form, and
 5. Kitchen moves the same order through accepted, preparing, ready.
 6. Cashier marks payment completed in `/dashboard/payments`.
 7. Customer uses `/order/[branchId]/[tableNumber]`, places an order, opens receipt, and sends feedback.
+
+Rotate these personas in manual QA so owner/admin/manager/waiter/kitchen/cashier and the public customer are all exercised before release.

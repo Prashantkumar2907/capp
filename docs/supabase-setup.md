@@ -47,3 +47,21 @@ npm run test:api
 ```
 
 The verification checks expected tables and RLS state. API smoke checks the Supabase-backed health route.
+
+## Storage and Realtime
+
+`supabase/04_storage_realtime.sql` prepares the `dish-images` bucket, public image reads, authenticated staff image writes, and realtime publication for operational tables.
+
+After setup, verify:
+
+- Dish images load from public storage paths and broken URLs fall back gracefully.
+- `orders`, `order_items`, `tables`, and `branch_dishes` are present in the realtime publication.
+- Public QR ordering can read active branches, tables, categories, dishes, branch availability, orders, order items, payments, receipts, and feedback according to the public policies.
+
+## Webhook Event Store
+
+`webhook_events` records Razorpay event IDs, payload hashes, processing status, safe errors, and processed timestamps. Keep this table service-role only in application code and RLS protected in the database.
+
+## Reset Safety
+
+`npm run db:migrate` refuses destructive resets on non-local hosts unless `ALLOW_DESTRUCTIVE_DB_RESET=1` is set. Use that override only for disposable demo databases.
