@@ -1,68 +1,61 @@
 # Loop 8 Report
 
 ## What was inspected
-- Reviewed App Router structure, dashboard overview, analytics page, shared Supabase queries, SQL schema/indexes, docs, and test coverage.
-- Focused inspection on owner/admin/manager analytics and operational insight workflows for growing restaurants.
+- Demo staff coverage, Supabase Auth account needs, staff onboarding/removal safety, docs, scripts, package commands, and tests.
 
 ## What was missing or weak
-- Dashboard and analytics fetched broad rows and returned raw orders/payments to the UI even when chart-ready aggregates were enough.
-- Analytics duplicated aggregation logic inside the page component.
-- Branch/date query hot paths were missing composite indexes for orders, order items, payments, and feedback.
-- Performance budgets were not documented for public QR, dashboard, analytics, kitchen, or payment flows.
+- SQL seed created staff rows but did not provide a repeatable way to create and remove matching Supabase Auth users for real role QA.
+- Demo auth account operations needed guardrails to avoid mutating production-like projects or printing temporary passwords.
 
 ## What was implemented
-- Added a typed dashboard summary builder that returns chart-ready metrics, recent orders, top dishes, status counts, source counts, and daily revenue.
-- Updated `getDashboardSummary` to select only the columns required for summary work.
-- Updated analytics to consume summary-owned chart data instead of aggregating full rows in the page.
-- Added composite branch/date indexes for analytics and dashboard hot paths.
-- Added `docs/performance.md` with page and data-access budgets.
+- Added `scripts/demo-accounts.mjs` with dry-run, `--create`, and `--remove` modes.
+- Added `npm run demo:accounts`.
+- Script targets only `demo.capp.local` accounts, links auth users to seeded staff rows, and clears `staff.user_id` on removal.
+- Added `ALLOW_DEMO_ACCOUNT_MUTATION=1` protection for non-local Supabase projects.
+- Documented disposable demo auth workflows in `docs/demo-data.md`.
 
 ## File-structure or architecture changes made
-- Added `src/lib/analytics/dashboard-summary.ts` for shared analytics logic.
-- Kept Supabase access in `src/lib/supabase/queries.ts`.
-- Kept performance documentation in `docs/performance.md`.
+- Kept repeatable developer automation in `scripts`.
+- Kept product/demo usage notes in `docs/demo-data.md`.
 
 ## Tests run
+- `npm run demo:accounts` dry run
 - `npm run lint`
 - `npm run typecheck`
 - `npm run build`
 - `npm run test`
 - `npm run test:api`
-- `npm run test:ui` with `NEXT_PUBLIC_APP_URL=http://localhost:3100` and `PORT=3100`
+- `npm run test:ui`
 - `npm audit --audit-level=moderate`
-- `npm run db:migrate`
+- `npm run db:migrate` skipped destructive reset because the configured database is not local.
 - `npm run db:verify`
 
 ## Demo data or personas used
-- Exercised owner/admin/manager analytics assumptions with demo orders, payments, feedback, and menu items.
-- Public customer UI regression suite continued to cover Masala Works QR ordering across desktop, tablet, and mobile.
+- Owner, admin, manager, waiter, kitchen, and cashier demo auth addresses are configured.
+- Actual create/remove was not run because the configured Supabase URL is non-local and `ALLOW_DEMO_ACCOUNT_MUTATION=1` was intentionally not set.
 
 ## Skeleton states added or verified
-- Verified dashboard and analytics skeleton layouts remained intact after summary data shape changes.
-- Verified public QR skeleton replacement still passes under delayed responses.
+- Dashboard route skeleton coverage remained covered by unit tests.
+- Public QR skeleton replacement remained green across desktop, tablet, and mobile.
 
 ## Readability/code-quality cleanup performed
-- Moved aggregation out of `analytics/page.tsx` and into a typed shared utility.
-- Removed raw `orders`/`payments` result dependence from analytics UI.
-- Added focused unit coverage for dashboard summary behavior and index presence.
+- Encapsulated demo account setup/removal in one script rather than ad hoc dashboard or SQL edits.
+- Added tests that prevent accidental real email domains or password logging.
 
 ## UI/UX and animation checks performed
-- Verified existing chart cards, stat cards, and responsive public flows still build and pass UI tests.
-- Confirmed no new animation timing or layout behavior was introduced.
+- UI suite continued to verify public and auth surfaces.
+- Browser role testing remains blocked until disposable demo auth mutation is explicitly enabled.
 
 ## API/query/security checks performed
-- Confirmed analytics queries remain branch-scoped.
-- Reduced over-fetching by selecting only summary columns.
-- Added branch/date composite indexes for orders, order items, payments, and feedback.
-- Confirmed client-trusted prices are still excluded from public order payload tests.
+- Script uses Supabase admin APIs server-side only and never prints service role keys or demo passwords.
+- Account mutation requires fake demo-domain emails and a disposable-environment flag.
+- Removal clears staff links before deleting auth users.
 
 ## Accessibility, performance, reliability, and production-readiness checks performed
-- Documented performance budgets and network inspection expectations.
-- Kept dashboard/analytics async states skeleton-based.
-- Preserved query cache keys by branch and date range.
-- Verified build output and audit remain clean.
+- The script is deterministic and repeatable for QA setup/teardown.
+- Dry run gives safe instructions without changing data.
+- No ignored artifacts or env files are staged.
 
 ## Remaining risks
-- True database-side aggregation via an RPC or materialized view is still a future scalability improvement for very high-volume branches.
-- Authenticated dashboard UI tests still need seeded Supabase Auth sessions to exercise chart rendering as real roles.
-- Playwright still reports the known Next.js smooth-scroll warning, which should be handled in the next UI/accessibility loop.
+- Full authenticated owner/admin/manager/waiter/kitchen/cashier browser QA still requires running the script against a disposable Supabase project.
+- The script should not be used for real staff onboarding; production invitations need audited invite flows.
