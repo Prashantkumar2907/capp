@@ -31,6 +31,8 @@ The current critical route IDs are:
 
 ## Data Access
 - Branch/date hot paths need composite indexes for orders, order items, payments, and feedback.
+- Table release checks need the active table index `idx_orders_branch_table_active` because payment settlement and cancellations verify whether another active order still occupies the table.
+- Menu management and public menu reads should use category sort and dish-name indexes as menus grow.
 - Large operational lists should be paginated or range-limited before adding new filters.
 - Client components should reuse query-backed state and stable query keys instead of issuing duplicate API calls for the same branch workflow.
 - Public clients must never submit trusted totals, item prices, payment status, roles, or permission decisions.

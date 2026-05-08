@@ -15,6 +15,10 @@ test("production operations docs cover release-critical setup topics", () => {
     "docs/google-oauth.md",
     "docs/testing-plan.md",
     "docs/performance.md",
+    "docs/product-understanding.md",
+    "docs/.llm-skills/auth-pattern.md",
+    "docs/.llm-skills/db-access.md",
+    "docs/.llm-skills/ui-components.md",
   ].forEach((path) => assert.equal(existsSync(path), true, `${path} should exist`));
 
   const docs = [
