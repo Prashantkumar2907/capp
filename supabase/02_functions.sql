@@ -20,8 +20,9 @@ create trigger subscriptions_updated_at before update on subscriptions for each 
 create or replace function app_user_org_id()
 returns uuid
 language sql
-security definer
 stable
+security definer
+set search_path = public, auth
 as $$
   select org_id from staff where user_id = auth.uid() and is_active = true limit 1;
 $$;
@@ -29,8 +30,9 @@ $$;
 create or replace function app_user_branch_id()
 returns uuid
 language sql
-security definer
 stable
+security definer
+set search_path = public, auth
 as $$
   select branch_id from staff where user_id = auth.uid() and is_active = true limit 1;
 $$;
@@ -38,8 +40,9 @@ $$;
 create or replace function app_user_role()
 returns text
 language sql
-security definer
 stable
+security definer
+set search_path = public, auth
 as $$
   select role from staff where user_id = auth.uid() and is_active = true limit 1;
 $$;
@@ -47,8 +50,9 @@ $$;
 create or replace function app_branch_org_id(branch uuid)
 returns uuid
 language sql
-security definer
 stable
+security definer
+set search_path = public, auth
 as $$
   select org_id from branches where id = branch limit 1;
 $$;
@@ -56,8 +60,9 @@ $$;
 create or replace function app_user_can_manage_branch(target_branch uuid)
 returns boolean
 language sql
-security definer
 stable
+security definer
+set search_path = public, auth
 as $$
   select exists (
     select 1

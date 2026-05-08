@@ -8,9 +8,9 @@ drop policy if exists dish_images_update on storage.objects;
 drop policy if exists dish_images_delete on storage.objects;
 
 create policy dish_images_select on storage.objects for select using (bucket_id = 'dish-images');
-create policy dish_images_insert on storage.objects for insert with check (bucket_id = 'dish-images' and auth.uid() is not null);
-create policy dish_images_update on storage.objects for update using (bucket_id = 'dish-images' and auth.uid() is not null);
-create policy dish_images_delete on storage.objects for delete using (bucket_id = 'dish-images' and auth.uid() is not null);
+create policy dish_images_insert on storage.objects for insert with check (bucket_id = 'dish-images' and app_user_role() in ('owner','admin','manager'));
+create policy dish_images_update on storage.objects for update using (bucket_id = 'dish-images' and app_user_role() in ('owner','admin','manager'));
+create policy dish_images_delete on storage.objects for delete using (bucket_id = 'dish-images' and app_user_role() in ('owner','admin','manager'));
 
 do $$
 begin

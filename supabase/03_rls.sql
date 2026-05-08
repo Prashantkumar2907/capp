@@ -43,18 +43,12 @@ create policy tables_select on tables for select using (true);
 create policy tables_manage on tables for all using (app_user_can_manage_branch(branch_id) and app_user_role() in ('owner','admin','manager','waiter')) with check (app_user_can_manage_branch(branch_id));
 
 create policy orders_select_staff on orders for select using (app_user_can_manage_branch(branch_id));
-create policy orders_select_public on orders for select using (true);
-create policy orders_insert_public on orders for insert with check (true);
 create policy orders_update_staff on orders for update using (app_user_can_manage_branch(branch_id)) with check (app_user_can_manage_branch(branch_id));
 
 create policy order_items_select_staff on order_items for select using (app_user_can_manage_branch(branch_id));
-create policy order_items_select_public on order_items for select using (true);
-create policy order_items_insert_public on order_items for insert with check (true);
 create policy order_items_update_staff on order_items for update using (app_user_can_manage_branch(branch_id)) with check (app_user_can_manage_branch(branch_id));
 
 create policy payments_select_staff on payments for select using (app_user_can_manage_branch(branch_id));
-create policy payments_select_public on payments for select using (true);
-create policy payments_insert_public on payments for insert with check (true);
 create policy payments_update_cashier on payments for update using (app_user_can_manage_branch(branch_id) and app_user_role() in ('owner','admin','manager','cashier')) with check (app_user_can_manage_branch(branch_id));
 
 create policy subscriptions_select on subscriptions for select using (org_id = app_user_org_id() and app_user_role() in ('owner','admin'));
@@ -64,4 +58,3 @@ create policy activity_logs_select on activity_logs for select using (org_id = a
 create policy activity_logs_insert on activity_logs for insert with check (org_id = app_user_org_id());
 
 create policy feedback_select_staff on feedback for select using (app_user_can_manage_branch(branch_id));
-create policy feedback_insert_public on feedback for insert with check (true);
