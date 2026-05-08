@@ -1,49 +1,60 @@
-# Loop 5
+# Loop 5 Report
 
-## Inspected
+## What was inspected
+- Waiter POS order creation, duplicate-click behavior, idempotency keys, request payload trust boundaries, order validation, protected route behavior, and QR regression tests.
 
-Reviewed cashier payment page, payment status mutation path, Razorpay webhook route, payment schema, RLS, database types, payment tests, and demo payment states.
+## What was missing or weak
+- Waiter-created orders did not include an idempotency key.
+- The waiter page sent a client-provided `waiterId`, even though the server already resolves trusted staff identity from the session.
+- Very fast repeated submits could call the mutation before React Query pending state was reflected in the UI.
 
-## Missing Or Weak
+## What was implemented
+- Added a per-draft `waiter:<branchId>:<uuid>` client request id for waiter order creation.
+- Added a `submittingRef` guard around waiter submit actions to block duplicate clicks before React state updates.
+- Removed the client-provided `waiterId` from the waiter order request payload.
+- Added tests proving waiter identity is stripped by shared validation and waiter POS submits carry idempotency safeguards.
 
-Cashier actions updated payment status directly from the browser. Razorpay webhook processing accepted missing secrets, parsed without JSON error handling, updated payments without an idempotency record, and did not update order payment outcomes consistently.
+## File-structure or architecture changes made
+- Kept waiter interactivity in `src/app/(dashboard)/dashboard/waiter/page.tsx`.
+- Kept trusted identity resolution in the existing server order service instead of moving staff identity into the client payload.
 
-## Implemented
+## Tests run
+- `npm run lint`
+- `npm run typecheck`
+- `npm run build`
+- `npm run test`
+- `npm run test:api`
+- `npm run test:ui`
+- `npm audit --audit-level=moderate`
+- `npm run db:migrate` skipped destructive reset because the configured database is not local.
+- `npm run db:verify`
 
-Added a server-side payment settlement endpoint with active staff checks, cashier/manager/admin/owner authorization, branch scoping, completed/refunded safeguards, manual transaction IDs, and order status synchronization. Added Razorpay signature verification helpers, event ID derivation, webhook event persistence for idempotency, duplicate handling, ignored/failed/processed states, and order status synchronization from provider events.
+## Demo data or personas used
+- Waiter workflow was exercised through unit validation and source-level duplicate-submit tests.
+- Manual browser QA confirmed `/dashboard/waiter` redirects signed-out users to `/sign-in?redirect=%2Fdashboard%2Fwaiter`.
 
-## File-Structure Or Architecture Changes
+## Skeleton states added or verified
+- Waiter route-level skeleton coverage from loop 4 remained in place and covered by unit tests.
+- Public QR skeleton replacement was reverified by the UI suite across desktop, tablet, and mobile.
 
-Added `src/lib/supabase/payments.ts` and `src/app/api/payments/[paymentId]/settle/route.ts`. Added `webhook_events` to the SQL schema and TypeScript database types.
+## Readability/code-quality cleanup performed
+- Removed an unnecessary client identity field from the order payload.
+- Centralized waiter submit behavior in `submitOrder` instead of calling `createOrder.mutate()` from multiple buttons.
 
-## Tests Run
+## UI/UX and animation checks performed
+- Header and cart submit buttons now share the same guarded submit path.
+- The header button uses the shared loading button state while an order is being sent.
 
-`npm run lint`, `npm run typecheck`, `npm run build`, `npm run test`, `npm run test:api`, `npm run test:ui`, `npm audit --audit-level=moderate`, `npm run db:migrate`, and `npm run db:verify`.
+## API/query/security checks performed
+- Shared order validation strips client-supplied waiter identity.
+- Server order creation remains responsible for resolving staff, branch access, prices, totals, and availability.
+- Idempotency keys protect duplicate submissions through the existing `orders(branch_id, client_request_id)` unique index.
 
-## Demo Data Or Personas Used
+## Accessibility, performance, reliability, and production-readiness checks performed
+- Duplicate-click and retry behavior is safer for slow Supabase responses and impatient dining-floor use.
+- No additional API calls were introduced.
+- No secrets or customer PII were logged.
 
-Exercised the cashier payment settlement path conceptually and kept the public customer QR flow passing. Demo seed includes pending, completed, failed, and refunded payments.
-
-## Skeleton States Added Or Verified
-
-Re-ran UI tests across desktop, tablet, and mobile to verify existing payment-adjacent public loading states were unaffected.
-
-## Readability And Code Quality Cleanup
-
-Moved payment trust logic out of the client page and Razorpay route into a typed service module. Reused API response helpers and client response parsing.
-
-## UI/UX And Animation Checks
-
-The cashier UI still uses the same visible Mark paid/Mark failed controls, but those actions now go through trusted server checks and continue to report errors through toasts.
-
-## API, Query, And Security Checks
-
-Added tests for HMAC verification, event ID fallback, malformed payment settlement IDs, and invalid webhook signatures. Webhooks now fail closed when the secret is missing and reject bad signatures before JSON parsing or database work.
-
-## Accessibility, Performance, Reliability, And Production Checks
-
-Webhook event storage gives safe retry/idempotency behavior. Settlement updates invalidate payment and dashboard cache keys. Duplicate provider events return success without repeated payment mutation.
-
-## Remaining Risks
-
-`webhook_events` SQL was not applied to the non-local configured database because destructive migration is guarded. Razorpay order creation, refund initiation, split/partial payments, and full provider replay timestamp validation still need dedicated product work.
+## Remaining risks
+- Authenticated browser testing for an actual waiter account is still pending.
+- Waiter menu data still uses an organization-level menu query rather than a branch-priced menu query.

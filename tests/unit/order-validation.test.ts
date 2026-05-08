@@ -52,3 +52,17 @@ test("createOrderSchema accepts bounded idempotency keys and rejects unsafe char
 
   assert.equal(unsafe.success, false);
 });
+
+test("createOrderSchema strips client-supplied waiter identity", () => {
+  const payload = createOrderSchema.parse({
+    branchId: "b0000000-0000-0000-0000-000000000099",
+    tableNumber: 1,
+    clientRequestId: "waiter:b0000000-0000-0000-0000-000000000099:retry01",
+    orderSource: "waiter",
+    waiterId: "50000000-0000-0000-0000-000000000004",
+    items: [{ dish_id: "d0000000-0000-0000-0000-000000000001", quantity: 1 }],
+  });
+
+  assert.equal("waiterId" in payload, false);
+  assert.equal(payload.clientRequestId?.startsWith("waiter:"), true);
+});

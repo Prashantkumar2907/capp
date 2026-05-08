@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Armchair, Search, Send, ShoppingBag, Table2 } from "lucide-react";
 import { toast } from "sonner";
@@ -21,7 +21,7 @@ import type { CartItem } from "@/stores/cart-store";
 import type { RestaurantTable } from "@/types/database";
 
 export default function WaiterPage() {
-  const { organization, branch, staff } = useAuth();
+  const { organization, branch } = useAuth();
   const [supabase] = useState(() => createClient());
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -30,6 +30,8 @@ export default function WaiterPage() {
   const [customerName, setCustomerName] = useState("");
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState<CartItem[]>([]);
+  const requestIdRef = useRef<string | null>(null);
+  const submittingRef = useRef(false);
 
   const menu = useQuery({
     queryKey: ["menu", organization?.id],
@@ -59,16 +61,21 @@ export default function WaiterPage() {
   const subtotal = items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
   const totals = calculateTotals(subtotal, Number(organization?.default_tax_percent ?? 5), Boolean(organization?.tax_inclusive ?? true));
 
+  useEffect(() => {
+    requestIdRef.current = null;
+  }, [branch?.id, items, tableNumber]);
+
   const createOrder = useMutation({
     mutationFn: async () => {
+      requestIdRef.current ??= `waiter:${branch!.id}:${crypto.randomUUID()}`;
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           branchId: branch!.id,
           tableNumber,
+          clientRequestId: requestIdRef.current,
           customerName,
-          waiterId: staff?.id,
           orderSource: "waiter",
           orderType: tableNumber ? "dine_in" : "takeaway",
           notes,
@@ -87,6 +94,7 @@ export default function WaiterPage() {
       setItems([]);
       setCustomerName("");
       setNotes("");
+      requestIdRef.current = null;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] }),
         queryClient.invalidateQueries({ queryKey: ["tables"] }),
@@ -94,7 +102,16 @@ export default function WaiterPage() {
       toast.success(order ? `Order #${order.order_number} sent` : "Order sent");
     },
     onError: (error) => toast.error(error.message),
+    onSettled: () => {
+      submittingRef.current = false;
+    },
   });
+
+  const submitOrder = () => {
+    if (!items.length || !branch || createOrder.isPending || submittingRef.current) return;
+    submittingRef.current = true;
+    createOrder.mutate();
+  };
 
   const addDish = (dishId: string) => {
     const dish = menu.data?.dishes.find((item) => item.id === dishId);
@@ -125,7 +142,7 @@ export default function WaiterPage() {
         title="Waiter POS"
         description="Create table orders quickly without leaving the dining floor."
         actions={
-          <Button disabled={!items.length || createOrder.isPending} onClick={() => createOrder.mutate()}>
+          <Button disabled={!items.length || createOrder.isPending} loading={createOrder.isPending} onClick={submitOrder}>
             <Send className="h-4 w-4" />
             Send to kitchen
           </Button>
@@ -197,7 +214,7 @@ export default function WaiterPage() {
             onDecrement={decrement}
             onRemove={(dishId) => setItems(items.filter((item) => item.dish_id !== dishId))}
             onNotes={(dishId, value) => setItems(items.map((item) => (item.dish_id === dishId ? { ...item, notes: value } : item)))}
-            onSubmit={() => createOrder.mutate()}
+            onSubmit={submitOrder}
           />
         </aside>
       </div>
