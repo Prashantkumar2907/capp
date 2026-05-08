@@ -14,3 +14,12 @@ test("auth page keeps form controls accessible", async ({ page }) => {
   await expect(page.getByLabel(/password/i)).toBeVisible();
   await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible();
 });
+
+test("root honors reduced motion for smooth scrolling", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+
+  await expect(page.locator("html")).toHaveAttribute("data-scroll-behavior", "smooth");
+  const scrollBehavior = await page.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior);
+  expect(scrollBehavior).toBe("auto");
+});
