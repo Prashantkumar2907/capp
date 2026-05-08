@@ -79,6 +79,7 @@ export const createOrderSchema = z.object({
   tableNumber: z.number().int().min(1).max(1000).nullable().optional(),
   customerName: z.string().trim().min(1).max(80).optional(),
   customerPhone: z.string().trim().min(3).max(24).optional(),
+  clientRequestId: z.string().trim().min(12).max(96).regex(/^[a-z0-9:_-]+$/i, "Invalid request id").optional(),
   orderType: z.enum(["dine_in", "takeaway", "delivery"]).default("dine_in"),
   orderSource: z.enum(["waiter", "qr_customer", "cashier"]).default("qr_customer"),
   notes: z.string().trim().max(500).optional(),

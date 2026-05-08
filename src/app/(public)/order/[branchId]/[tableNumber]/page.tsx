@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DishTile } from "@/components/features/menu/dish-tile";
 import { CartPanel } from "@/components/features/cart/cart-panel";
 import { calculateTotals } from "@/lib/utils";
+import { useHasMounted } from "@/hooks/use-has-mounted";
 import { useCartStore } from "@/stores/cart-store";
 import type { Category, DishWithRelations, RestaurantTable } from "@/types/database";
 
@@ -37,6 +38,8 @@ export default function PublicOrderPage() {
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("all");
   const cart = useCartStore();
+  const hasMounted = useHasMounted();
+  const cartItems = hasMounted ? cart.items : [];
 
   useEffect(() => {
     if (branchId && tableNumber) cart.setContext(branchId, tableNumber);
@@ -61,7 +64,7 @@ export default function PublicOrderPage() {
     });
   }, [categoryId, menu.data?.dishes, search]);
 
-  const subtotal = cart.subtotal();
+  const subtotal = cartItems.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
   const totals = calculateTotals(subtotal, Number(menu.data?.branch.organizations?.default_tax_percent ?? 5), Boolean(menu.data?.branch.organizations?.tax_inclusive ?? true));
 
   const addDish = (dish: DishWithRelations) => {
@@ -135,9 +138,9 @@ export default function PublicOrderPage() {
                 <DishTile
                   key={dish.id}
                   dish={dish}
-                  quantity={cart.items.find((item) => item.dish_id === dish.id)?.quantity ?? 0}
+                  quantity={cartItems.find((item) => item.dish_id === dish.id)?.quantity ?? 0}
                   onAdd={() => addDish(dish)}
-                  onRemove={() => cart.updateQuantity(dish.id, (cart.items.find((item) => item.dish_id === dish.id)?.quantity ?? 1) - 1)}
+                  onRemove={() => cart.updateQuantity(dish.id, (cartItems.find((item) => item.dish_id === dish.id)?.quantity ?? 1) - 1)}
                 />
               ))}
             </div>
@@ -145,7 +148,7 @@ export default function PublicOrderPage() {
         </section>
         <aside className="hidden xl:block">
           <CartPanel
-            items={cart.items}
+            items={cartItems}
             subtotal={subtotal}
             tax={totals.tax}
             total={totals.total}
@@ -154,19 +157,19 @@ export default function PublicOrderPage() {
               const dish = menu.data?.dishes.find((item) => item.id === dishId);
               if (dish) addDish(dish);
             }}
-            onDecrement={(dishId) => cart.updateQuantity(dishId, (cart.items.find((item) => item.dish_id === dishId)?.quantity ?? 1) - 1)}
+            onDecrement={(dishId) => cart.updateQuantity(dishId, (cartItems.find((item) => item.dish_id === dishId)?.quantity ?? 1) - 1)}
             onRemove={cart.removeItem}
             onNotes={cart.updateNotes}
             onSubmit={() => router.push(`/order/${branchId}/${tableNumber}/payment`)}
           />
         </aside>
       </div>
-      {cart.items.length ? (
+      {cartItems.length ? (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-card p-3 shadow-sm xl:hidden">
           <Link href={`/order/${branchId}/${tableNumber}/payment`}>
             <Button className="w-full">
               <ShoppingBag className="h-4 w-4" />
-              Review {cart.count()} items
+              Review {cartItems.reduce((sum, item) => sum + item.quantity, 0)} items
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>

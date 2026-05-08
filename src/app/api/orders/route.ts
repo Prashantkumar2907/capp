@@ -16,5 +16,5 @@ export async function POST(request: NextRequest) {
     return apiError(result.code, result.message, result.status);
   }
 
-  return apiOk({ order: result.order });
+  return apiOk({ order: result.order, duplicate: result.duplicate });
 }

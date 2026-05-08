@@ -5,7 +5,7 @@ import type { CreateOrderInput } from "@/lib/validation/schemas";
 import type { Branch, Dish, Order, Staff } from "@/types/database";
 
 export type CreateOrderResult =
-  | { ok: true; order: Order }
+  | { ok: true; order: Order; duplicate: boolean }
   | { ok: false; status: number; code: string; message: string };
 
 type BranchWithOrganization = Branch & {
@@ -56,6 +56,11 @@ export async function createRestaurantOrder(input: CreateOrderInput): Promise<Cr
     if (!table) return failure(404, "TABLE_NOT_FOUND", "Table not found");
   }
 
+  if (input.clientRequestId) {
+    const existingOrder = await findOrderByClientRequest(admin, input.branchId, input.clientRequestId);
+    if (existingOrder) return { ok: true, order: existingOrder, duplicate: true };
+  }
+
   const dishIds = [...new Set(input.items.map((item) => item.dish_id))];
   const { data: pricedDishes, error: dishError } = await admin
     .from("branch_dishes")
@@ -102,6 +107,7 @@ export async function createRestaurantOrder(input: CreateOrderInput): Promise<Cr
       table_number: input.tableNumber ?? null,
       customer_name: input.customerName || null,
       customer_phone: input.customerPhone || null,
+      client_request_id: input.clientRequestId ?? null,
       waiter_id: actor.staffId,
       order_type: input.orderType,
       order_source: input.orderSource,
@@ -116,6 +122,10 @@ export async function createRestaurantOrder(input: CreateOrderInput): Promise<Cr
     .single();
 
   if (orderError || !order) {
+    if (input.clientRequestId && orderError?.code === "23505") {
+      const existingOrder = await findOrderByClientRequest(admin, input.branchId, input.clientRequestId);
+      if (existingOrder) return { ok: true, order: existingOrder, duplicate: true };
+    }
     return failure(400, "ORDER_CREATE_FAILED", "Unable to create order");
   }
 
@@ -154,7 +164,18 @@ export async function createRestaurantOrder(input: CreateOrderInput): Promise<Cr
     await admin.from("tables").update({ status: "occupied" }).eq("branch_id", input.branchId).eq("table_number", input.tableNumber);
   }
 
-  return { ok: true, order };
+  return { ok: true, order, duplicate: false };
+}
+
+async function findOrderByClientRequest(admin: ReturnType<typeof createAdminSupabase>, branchId: string, clientRequestId: string) {
+  const { data } = await admin
+    .from("orders")
+    .select("*")
+    .eq("branch_id", branchId)
+    .eq("client_request_id", clientRequestId)
+    .maybeSingle();
+
+  return data ?? null;
 }
 
 async function resolveOrderActor(

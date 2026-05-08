@@ -32,3 +32,23 @@ test("createOrderSchema requires QR customer orders to submit bounded quantities
 
   assert.equal(parsed.success, false);
 });
+
+test("createOrderSchema accepts bounded idempotency keys and rejects unsafe characters", () => {
+  const parsed = createOrderSchema.parse({
+    branchId: "b0000000-0000-0000-0000-000000000099",
+    tableNumber: 1,
+    clientRequestId: "qr_20260508_table_1",
+    items: [{ dish_id: "d0000000-0000-0000-0000-000000000001", quantity: 1 }],
+  });
+
+  assert.equal(parsed.clientRequestId, "qr_20260508_table_1");
+
+  const unsafe = createOrderSchema.safeParse({
+    branchId: "b0000000-0000-0000-0000-000000000099",
+    tableNumber: 1,
+    clientRequestId: "table 1 / retry",
+    items: [{ dish_id: "d0000000-0000-0000-0000-000000000001", quantity: 1 }],
+  });
+
+  assert.equal(unsafe.success, false);
+});

@@ -232,6 +232,7 @@ export type Order = {
   table_number: number | null;
   customer_name: string | null;
   customer_phone: string | null;
+  client_request_id: string | null;
   waiter_id: string | null;
   order_type: "dine_in" | "takeaway" | "delivery";
   order_source: "waiter" | "qr_customer" | "cashier";

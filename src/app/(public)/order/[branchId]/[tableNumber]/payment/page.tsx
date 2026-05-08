@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, CreditCard, Send } from "lucide-react";
@@ -10,9 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { CartPanel } from "@/components/features/cart/cart-panel";
+import { readApiResponse } from "@/lib/api/client";
 import { calculateTotals } from "@/lib/utils";
+import { useHasMounted } from "@/hooks/use-has-mounted";
 import { useCartStore } from "@/stores/cart-store";
 
 interface PublicMenuMeta {
@@ -33,6 +36,9 @@ export default function PublicPaymentPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const hasMounted = useHasMounted();
+  const cartItems = hasMounted ? cart.items : [];
 
   const meta = useQuery({
     queryKey: ["public-menu-meta", branchId, tableNumber],
@@ -45,22 +51,25 @@ export default function PublicPaymentPage() {
     enabled: !!branchId && !!tableNumber,
   });
 
-  const subtotal = cart.subtotal();
+  const subtotal = cartItems.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
   const totals = useMemo(
     () => calculateTotals(subtotal, Number(meta.data?.branch.organizations?.default_tax_percent ?? 5), Boolean(meta.data?.branch.organizations?.tax_inclusive ?? true)),
     [meta.data?.branch.organizations?.default_tax_percent, meta.data?.branch.organizations?.tax_inclusive, subtotal]
   );
 
   const submitOrder = async () => {
-    if (!cart.items.length) return;
+    if (!cart.items.length || submittingRef.current || meta.isLoading || meta.error) return;
+    submittingRef.current = true;
     setSubmitting(true);
     try {
+      const clientRequestId = cart.ensureSubmissionKey();
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           branchId,
           tableNumber,
+          clientRequestId,
           customerName,
           customerPhone,
           orderSource: "qr_customer",
@@ -73,13 +82,15 @@ export default function PublicPaymentPage() {
           })),
         }),
       });
-      const payload = (await response.json()) as { error?: string; order?: { id: string } };
-      if (!response.ok || !payload.order) throw new Error(payload.error ?? "Unable to place order");
+      const payload = await readApiResponse<{ order?: { id: string }; duplicate?: boolean }>(response);
+      if (!payload.order) throw new Error("Unable to place order");
       cart.clear();
+      toast.success(payload.duplicate ? "Order already received. Opening receipt." : "Order sent to the kitchen.");
       router.replace(`/receipt/${payload.order.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to place order");
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -102,7 +113,15 @@ export default function PublicPaymentPage() {
                 </div>
                 <div>
                   <h1 className="text-lg font-semibold">Review and send order</h1>
-                  <p className="text-xs text-muted-foreground">Payment can be completed after staff confirms the order.</p>
+                  {meta.isLoading ? (
+                    <Skeleton className="mt-2 h-3 w-56" />
+                  ) : meta.error ? (
+                    <p className="mt-1 text-xs text-destructive">Branch details could not be loaded. Check your connection and try again.</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {meta.data?.branch.organizations?.name ?? "Restaurant"} - Table {tableNumber} - payment after staff confirms
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
@@ -116,31 +135,32 @@ export default function PublicPaymentPage() {
               <Field label="Order note">
                 <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Anything the kitchen should know" />
               </Field>
-              {!cart.items.length ? (
+              {!cartItems.length ? (
                 <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">Your cart is empty. Return to the menu to add dishes.</div>
               ) : null}
             </CardContent>
           </Card>
         </section>
         <CartPanel
-          items={cart.items}
+          items={cartItems}
           subtotal={subtotal}
           tax={totals.tax}
           total={totals.total}
           submitLabel="Place order"
           submitting={submitting}
+          disabled={meta.isLoading || Boolean(meta.error)}
           onIncrement={(dishId) => {
-            const item = cart.items.find((row) => row.dish_id === dishId);
+            const item = cartItems.find((row) => row.dish_id === dishId);
             if (item) cart.updateQuantity(dishId, item.quantity + 1);
           }}
-          onDecrement={(dishId) => cart.updateQuantity(dishId, (cart.items.find((item) => item.dish_id === dishId)?.quantity ?? 1) - 1)}
+          onDecrement={(dishId) => cart.updateQuantity(dishId, (cartItems.find((item) => item.dish_id === dishId)?.quantity ?? 1) - 1)}
           onRemove={cart.removeItem}
           onNotes={cart.updateNotes}
           onSubmit={submitOrder}
         />
       </div>
       <div className="fixed inset-x-0 bottom-0 border-t bg-card p-3 xl:hidden">
-        <Button className="w-full" disabled={!cart.items.length || submitting} onClick={submitOrder}>
+        <Button className="w-full" disabled={!cartItems.length || submitting || meta.isLoading || Boolean(meta.error)} onClick={submitOrder}>
           <Send className="h-4 w-4" />
           {submitting ? "Sending..." : "Place order"}
         </Button>
