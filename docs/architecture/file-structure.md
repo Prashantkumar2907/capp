@@ -30,6 +30,8 @@ Every route that fetches data should include a `loading.tsx` skeleton matching t
 
 `src/lib/constants`, `src/lib/enums`, `src/lib/types`, `src/lib/utils`, and `src/types` contain domain enums, status transitions, typed DTOs, formatting helpers, text helpers, async helpers, and generated or hand-maintained database types. Keep reusable generic primitives in the folder-based shared layers so `@/lib/utils`, `@/lib/enums`, and `@/lib/types` remain stable imports across projects.
 
+`src/lib/performance` contains machine-readable budgets for critical workflows. Add or update budgets when introducing high-traffic customer or staff routes so skeleton, pagination, duplicate-request, image, latency, index, and trust-boundary expectations stay testable.
+
 `src/lib/actions` should be used for server actions that need validation, permission checks, audit logging, or trusted writes.
 
 `src/hooks` contains client hooks that wrap query/cache behavior, realtime subscriptions, and browser-only state. Hooks must clean up subscriptions when role, branch, or tenant context changes.
