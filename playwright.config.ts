@@ -9,7 +9,7 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: "npm run dev",
+    command: "npm run dev -- --webpack",
     url: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
     reuseExistingServer: true,
     timeout: 120000,

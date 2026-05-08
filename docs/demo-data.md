@@ -13,4 +13,4 @@ The seed includes realistic branches, tables, categories, dishes, placeholder di
 
 Demo emails use the `demo.capp.local` domain and are not real personal accounts. Customer names are generic role labels such as `Cafe guest` and `Pickup guest`; no real customer identifiers or payment credentials are seeded.
 
-Dish images use stable placeholder image URLs and the UI falls back to a dish icon if media fails. Public QR links are stored on seeded table rows as `/order/<branchId>/<tableNumber>`.
+Dish images use stable placeholder image URLs today. Production imports should upload final sales/demo media to the public `dish-images` Supabase storage bucket and store the resulting public URL on `dishes.image_url`; the UI lazy-loads those images with dish-name alt text and falls back to an accessible dish placeholder if media fails. Public QR links are stored on seeded table rows as `/order/<branchId>/<tableNumber>`.

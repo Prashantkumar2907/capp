@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
+import { DishImage } from "@/components/features/menu/dish-image";
 import { createClient } from "@/lib/supabase/client";
 import { getBranchMenu } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/utils";
@@ -148,9 +149,7 @@ export default function MenuPage() {
           {dishes.map((dish) => (
             <Card key={dish.id}>
               <CardContent className="flex gap-3 p-3">
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-secondary">
-                  {dish.image_url ? <div className="h-full w-full bg-cover bg-center" role="img" aria-label={dish.name} style={{ backgroundImage: `url(${dish.image_url})` }} /> : <UtensilsCrossed className="h-6 w-6 text-muted-foreground" />}
-                </div>
+                <DishImage src={dish.image_url} alt={dish.name} className="h-20 w-20 shrink-0 rounded-2xl" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <h2 className="truncate text-sm font-semibold">{dish.name}</h2>

@@ -1,9 +1,10 @@
 "use client";
 
-import { Leaf, Minus, Plus, Timer, UtensilsCrossed } from "lucide-react";
+import { Leaf, Minus, Plus, Timer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { DishImage } from "@/components/features/menu/dish-image";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { DishWithRelations } from "@/types/database";
 
@@ -22,15 +23,7 @@ export function DishTile({ dish, quantity = 0, disabled, onAdd, onRemove, classN
   return (
     <Card className={cn("group transition-colors duration-150 hover:border-primary/40", !available && "opacity-60", className)}>
       <CardContent className="flex gap-3 p-3">
-        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-secondary">
-          {dish.image_url ? (
-            <div className="h-full w-full bg-cover bg-center transition-transform duration-300 group-hover:scale-105" role="img" aria-label={dish.name} style={{ backgroundImage: `url(${dish.image_url})` }} />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              <UtensilsCrossed className="h-7 w-7 text-muted-foreground" />
-            </div>
-          )}
-        </div>
+        <DishImage src={dish.image_url} alt={dish.name} className="relative h-24 w-24 shrink-0 rounded-2xl" />
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
@@ -58,7 +51,7 @@ export function DishTile({ dish, quantity = 0, disabled, onAdd, onRemove, classN
                 </Button>
               </div>
             ) : (
-              <Button size="sm" variant="secondary" onClick={onAdd} disabled={!available}>
+              <Button size="sm" variant="secondary" onClick={onAdd} disabled={!available} aria-label={`Add ${dish.name}`}>
                 <Plus className="h-3.5 w-3.5" />
                 Add
               </Button>

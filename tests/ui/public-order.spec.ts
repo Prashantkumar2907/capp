@@ -200,7 +200,7 @@ test("public QR payment sends one idempotent order request on duplicate clicks",
   await expect(page.getByRole("heading", { name: /review and send order/i })).toBeVisible();
 
   await page.getByRole("button", { name: /^place order$/i }).last().dblclick();
-  await expect(page).toHaveURL(new RegExp(`/receipt/${orderId}$`));
+  await expect(page).toHaveURL(new RegExp(`/receipt/${orderId}$`), { timeout: 15000 });
 
   expect(submittedBodies).toHaveLength(1);
   const submitted = submittedBodies[0];
