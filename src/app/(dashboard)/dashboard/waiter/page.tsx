@@ -74,9 +74,7 @@ export default function WaiterPage() {
           notes,
           items: items.map((item) => ({
             dish_id: item.dish_id,
-            dish_name: item.dish_name,
             quantity: item.quantity,
-            price_at_order: item.unit_price,
             notes: item.notes,
           })),
         }),

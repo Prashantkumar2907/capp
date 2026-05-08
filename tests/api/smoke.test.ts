@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import test from "node:test";
 import { config } from "dotenv";
 
-async function main() {
+test("health route returns ok", async () => {
   config({ path: ".env.local" });
   const { GET: health } = await import("../../src/app/api/health/route");
   const response = await health();
@@ -9,10 +10,4 @@ async function main() {
 
   assert.equal(response.status, 200, body.error ?? "health route should return 200");
   assert.equal(body.ok, true);
-  console.log("api smoke passed");
-}
-
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
 });
