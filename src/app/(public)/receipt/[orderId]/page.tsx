@@ -11,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { ReceiptSkeleton } from "@/components/ui/loading-patterns";
 import { OrderStatusBadge } from "@/components/shared/status-badge";
-import { createClient } from "@/lib/supabase/client";
+import { readApiResponse } from "@/lib/api/client";
 import { formatCurrency, formatDateTime, upiLink } from "@/lib/utils";
 import type { Branch, Order, OrderItem, Payment } from "@/types/database";
 
@@ -24,7 +24,6 @@ type ReceiptOrder = Order & {
 export default function ReceiptPage() {
   const params = useParams<{ orderId: string }>();
   const orderId = safeParam(params.orderId);
-  const supabase = createClient();
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
 
@@ -44,13 +43,17 @@ export default function ReceiptPage() {
     mutationFn: async () => {
       const order = receipt.data;
       if (!order) return;
-      const { error } = await supabase.from("feedback").insert({
-        order_id: order.id,
-        branch_id: order.branch_id,
-        rating,
-        comment: comment || null,
+      const response = await fetch("/api/public/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: order.id,
+          branchId: order.branch_id,
+          rating,
+          comment: comment || undefined,
+        }),
       });
-      if (error) throw error;
+      await readApiResponse(response);
     },
     onSuccess: () => toast.success("Thank you for the feedback"),
     onError: (error) => toast.error(error.message),

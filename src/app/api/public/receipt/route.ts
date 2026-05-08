@@ -1,23 +1,17 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { createAdminSupabase } from "@/lib/supabase/admin";
+import type { NextRequest } from "next/server";
+import { apiError, apiOk, apiValidationError } from "@/lib/api/responses";
+import { getPublicReceipt } from "@/lib/supabase/public";
+import { publicReceiptQuerySchema } from "@/lib/validation/schemas";
 
 export async function GET(request: NextRequest) {
-  const orderId = request.nextUrl.searchParams.get("orderId");
+  const parsed = publicReceiptQuerySchema.safeParse({
+    orderId: request.nextUrl.searchParams.get("orderId"),
+  });
 
-  if (!orderId) {
-    return NextResponse.json({ error: "orderId is required" }, { status: 400 });
-  }
+  if (!parsed.success) return apiValidationError(parsed.error);
 
-  const admin = createAdminSupabase();
-  const { data: order, error } = await admin
-    .from("orders")
-    .select("*, order_items(*), payments(*), branches(*, organizations(name, default_tax_percent, tax_inclusive))")
-    .eq("id", orderId)
-    .single();
+  const result = await getPublicReceipt(parsed.data.orderId);
+  if (!result.ok) return apiError(result.code, result.message, result.status);
 
-  if (error || !order) {
-    return NextResponse.json({ error: error?.message ?? "Receipt not found" }, { status: 404 });
-  }
-
-  return NextResponse.json({ order });
+  return apiOk({ order: result.data.order });
 }

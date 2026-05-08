@@ -1,65 +1,18 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { createAdminSupabase } from "@/lib/supabase/admin";
-import type { Branch, Category, Dish, RestaurantTable } from "@/types/database";
-
-type BranchDishRow = {
-  custom_price: number | null;
-  is_available: boolean;
-  dishes: (Dish & { categories: Pick<Category, "name"> | null }) | null;
-};
+import type { NextRequest } from "next/server";
+import { apiError, apiOk, apiValidationError } from "@/lib/api/responses";
+import { getPublicMenu } from "@/lib/supabase/public";
+import { publicMenuQuerySchema } from "@/lib/validation/schemas";
 
 export async function GET(request: NextRequest) {
-  const branchId = request.nextUrl.searchParams.get("branchId");
-  const tableNumber = Number(request.nextUrl.searchParams.get("tableNumber") ?? 0);
-
-  if (!branchId) {
-    return NextResponse.json({ error: "branchId is required" }, { status: 400 });
-  }
-
-  const admin = createAdminSupabase();
-  const { data: branch, error: branchError } = await admin
-    .from("branches")
-    .select("*, organizations(name, default_tax_percent, tax_inclusive)")
-    .eq("id", branchId)
-    .eq("is_active", true)
-    .single();
-
-  if (branchError || !branch) {
-    return NextResponse.json({ error: "Branch not found" }, { status: 404 });
-  }
-
-  const [{ data: table }, { data: categories }, { data: branchDishes, error: menuError }] = await Promise.all([
-    tableNumber
-      ? admin.from("tables").select("*").eq("branch_id", branchId).eq("table_number", tableNumber).eq("is_active", true).maybeSingle()
-      : Promise.resolve({ data: null }),
-    admin.from("categories").select("*").eq("org_id", (branch as Branch).org_id).eq("is_active", true).order("sort_order"),
-    admin
-      .from("branch_dishes")
-      .select("custom_price, is_available, dishes(*, categories(name))")
-      .eq("branch_id", branchId)
-      .eq("is_available", true)
-      .order("created_at", { ascending: true }),
-  ]);
-
-  if (menuError) {
-    return NextResponse.json({ error: menuError.message }, { status: 400 });
-  }
-
-  const dishes = ((branchDishes ?? []) as BranchDishRow[])
-    .map((row) => {
-      if (!row.dishes || !row.dishes.is_active) return null;
-      return {
-        ...row.dishes,
-        price: Number(row.custom_price ?? row.dishes.price),
-        categories: row.dishes.categories,
-      };
-    })
-    .filter(Boolean);
-
-  return NextResponse.json({
-    branch: branch as Branch & { organizations: { name: string; default_tax_percent: number; tax_inclusive: boolean } | null },
-    table: table as RestaurantTable | null,
-    categories: categories ?? [],
-    dishes,
+  const parsed = publicMenuQuerySchema.safeParse({
+    branchId: request.nextUrl.searchParams.get("branchId"),
+    tableNumber: request.nextUrl.searchParams.get("tableNumber") ?? undefined,
   });
+
+  if (!parsed.success) return apiValidationError(parsed.error);
+
+  const result = await getPublicMenu(parsed.data);
+  if (!result.ok) return apiError(result.code, result.message, result.status);
+
+  return apiOk(result.data);
 }

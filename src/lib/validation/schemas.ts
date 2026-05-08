@@ -80,6 +80,20 @@ export const feedbackSchema = z.object({
   comment: z.string().max(600).optional(),
 });
 
+export const publicMenuQuerySchema = z.object({
+  branchId: dbUuidSchema,
+  tableNumber: z.coerce.number().int().min(1).max(1000).optional(),
+});
+
+export const publicReceiptQuerySchema = z.object({
+  orderId: dbUuidSchema,
+});
+
+export const publicFeedbackSchema = feedbackSchema.extend({
+  orderId: dbUuidSchema,
+  branchId: dbUuidSchema,
+});
+
 export const createOrderSchema = z.object({
   branchId: dbUuidSchema,
   tableNumber: z.number().int().min(1).max(1000).nullable().optional(),
@@ -117,3 +131,6 @@ export type DishInput = z.infer<typeof dishSchema>;
 export type DishUpdateInput = z.infer<typeof dishUpdateSchema>;
 export type PaymentSettlementInput = z.infer<typeof paymentSettlementSchema>;
 export type OrderStatusUpdateInput = z.infer<typeof orderStatusUpdateSchema>;
+export type PublicMenuQueryInput = z.infer<typeof publicMenuQuerySchema>;
+export type PublicReceiptQueryInput = z.infer<typeof publicReceiptQuerySchema>;
+export type PublicFeedbackInput = z.infer<typeof publicFeedbackSchema>;
