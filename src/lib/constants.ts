@@ -11,7 +11,7 @@ export const roleLabels: Record<Role, string> = {
   cashier: "Cashier",
 };
 
-export const orderStatuses = ["pending", "confirmed", "preparing", "ready", "served", "cancelled"] as const;
+export const orderStatuses = ["pending", "confirmed", "preparing", "ready", "served", "paid", "cancelled", "refunded", "failed"] as const;
 
 export const orderStatusLabels: Record<OrderStatus, string> = {
   pending: "Pending",
@@ -19,7 +19,10 @@ export const orderStatusLabels: Record<OrderStatus, string> = {
   preparing: "Preparing",
   ready: "Ready",
   served: "Served",
+  paid: "Paid",
   cancelled: "Cancelled",
+  refunded: "Refunded",
+  failed: "Failed",
 };
 
 export const orderStatusFlow: OrderStatus[] = ["pending", "confirmed", "preparing", "ready", "served"];

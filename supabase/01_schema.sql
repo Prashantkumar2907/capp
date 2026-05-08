@@ -116,7 +116,7 @@ create table orders (
   waiter_id uuid references staff(id) on delete set null,
   order_type text not null default 'dine_in' check (order_type in ('dine_in','takeaway','delivery')),
   order_source text not null default 'waiter' check (order_source in ('waiter','qr_customer','cashier')),
-  status text not null default 'pending' check (status in ('pending','confirmed','preparing','ready','served','cancelled')),
+  status text not null default 'pending' check (status in ('pending','confirmed','preparing','ready','served','paid','cancelled','refunded','failed')),
   subtotal numeric(10,2) not null default 0,
   tax numeric(10,2) not null default 0,
   discount numeric(10,2) not null default 0,

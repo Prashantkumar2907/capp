@@ -229,7 +229,7 @@ export type Order = {
   waiter_id: string | null;
   order_type: "dine_in" | "takeaway" | "delivery";
   order_source: "waiter" | "qr_customer" | "cashier";
-  status: "pending" | "confirmed" | "preparing" | "ready" | "served" | "cancelled";
+  status: "pending" | "confirmed" | "preparing" | "ready" | "served" | "paid" | "cancelled" | "refunded" | "failed";
   subtotal: number;
   tax: number;
   discount: number;

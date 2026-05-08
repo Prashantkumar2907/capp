@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { orderStatuses } from "@/lib/constants";
 import type { Database, DishWithRelations, OrderWithItems } from "@/types/database";
 
 export type TypedSupabase = SupabaseClient<Database>;
@@ -66,7 +67,7 @@ export async function getOrdersWithItems(supabase: TypedSupabase, branchId: stri
     .from("orders")
     .select("*, order_items(*)")
     .eq("branch_id", branchId)
-    .in("status", ["pending", "confirmed", "preparing", "ready", "served"])
+    .in("status", [...orderStatuses])
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as OrderWithItems[];
