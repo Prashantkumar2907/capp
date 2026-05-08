@@ -1,49 +1,56 @@
-# Loop 4
+# Loop 4 Report
 
-## Inspected
+## What was inspected
+- Dashboard child route loading coverage, shared skeleton primitives, public QR skeleton replacement, build route output, UI tests, and manual QR ordering behavior.
 
-Reviewed staff management, branch management, validation schemas, RLS policies, server auth helpers, API routes, tests, and dashboard role workflows.
+## What was missing or weak
+- Dashboard child routes had client-side loading states, but most lacked App Router `loading.tsx` files.
+- Loading semantics were not centrally guaranteed for dashboard route transitions.
 
-## Missing Or Weak
+## What was implemented
+- Added `DashboardRouteSkeleton` with variants for analytics, board, cards, form, menu, orders, and table-style pages.
+- Added route-level `loading.tsx` files for analytics, branches, kitchen, menu, orders, payments, settings, staff, tables, and waiter routes.
+- Added unit tests that enforce dashboard child loading coverage and `role="status"` semantics.
 
-Staff and branch pages performed browser-side Supabase writes. That meant org IDs, branch IDs, role changes, branch activation, and staff deletion depended too much on client behavior and RLS alone. Staff removal used hard delete instead of disabled access.
+## File-structure or architecture changes made
+- Kept route loading files beside their pages in `src/app/(dashboard)/dashboard/<route>/loading.tsx`.
+- Kept reusable skeleton layout composition in `src/components/ui/loading-patterns.tsx`.
 
-## Implemented
+## Tests run
+- `npm run lint`
+- `npm run typecheck`
+- `npm run build`
+- `npm run test`
+- `npm run test:api`
+- `npm run test:ui`
+- `npm audit --audit-level=moderate`
+- `npm run db:migrate` skipped destructive reset because the configured database is not local.
+- `npm run db:verify`
 
-Added server-side management APIs for branch create/update and staff create/update/disable. Added active staff context resolution, owner/admin enforcement, tenant-scoped branch/staff checks, branch ownership checks, last-active-branch protection, owner/self access safeguards, and soft staff disable. Updated branch and staff pages to call API routes for mutations while keeping RLS-backed reads.
+## Demo data or personas used
+- Public QR customer route for branch `b0000000-0000-0000-0000-000000000099`, table `1`.
+- Dashboard staff route loading coverage was verified structurally for owner/admin/manager/waiter/kitchen/cashier surfaces.
 
-## File-Structure Or Architecture Changes
+## Skeleton states added or verified
+- Added dashboard route skeletons for all dashboard child routes.
+- Verified QR menu loading state transitions to real content in browser and via desktop/tablet/mobile Playwright tests.
 
-Added `src/lib/supabase/permissions.ts`, `src/lib/supabase/management.ts`, `src/lib/api/client.ts`, and API routes under `src/app/api/branches` and `src/app/api/staff`.
+## Readability/code-quality cleanup performed
+- Centralized skeleton variants instead of copying large placeholder layouts into each route.
+- Added tests that make future missing loading files obvious.
 
-## Tests Run
+## UI/UX and animation checks performed
+- In-app browser QA confirmed QR page loading content and final menu content without console errors.
+- UI suite verified public skeleton replacement, primary actions, reduced-motion behavior, and no horizontal overflow.
 
-`npm run lint`, `npm run typecheck`, `npm run build`, `npm run test`, `npm run test:api`, `npm run test:ui`, `npm audit --audit-level=moderate`, `npm run db:migrate`, and `npm run db:verify`.
+## API/query/security checks performed
+- Existing API and DB checks remained green after adding route-level skeletons.
+- No new client-side price or payment trust was introduced.
 
-## Demo Data Or Personas Used
+## Accessibility, performance, reliability, and production-readiness checks performed
+- Dashboard route skeletons now announce loading with `role="status"` and an accessible label.
+- Skeleton dimensions match final cards, boards, forms, tables, and order layouts to reduce layout shift.
 
-Exercised owner/admin management assumptions, disabled staff readiness, branch activation safeguards, and the existing public customer UI test suite.
-
-## Skeleton States Added Or Verified
-
-Re-ran desktop, tablet, and mobile UI tests to verify existing skeleton and loading coverage still passes after management API changes.
-
-## Readability And Code Quality Cleanup
-
-Moved trusted staff/branch mutation rules out of page components into typed service functions. Added a small reusable client API response reader for dashboard mutations.
-
-## UI/UX And Animation Checks
-
-Verified public and auth flows remain responsive. Branch/staff pages now surface server validation and permission errors through existing toast error handling.
-
-## API, Query, And Security Checks
-
-Added API contract tests proving invalid owner-role creation and malformed branch IDs are rejected before auth/database work. Server now ignores client org IDs for branch/staff creation and uses the authenticated staff member's organization.
-
-## Accessibility, Performance, Reliability, And Production Checks
-
-Soft-disabling staff preserves auditability and avoids destructive account removal. Branch creation now creates starter tables server-side and rolls back the branch if table creation fails.
-
-## Remaining Risks
-
-List queries for staff and branches still happen client-side through Supabase; future loops should add paginated server-backed listing for larger tenants. Staff invitation emails, branch assignment UI, and explicit confirmation dialogs for destructive/disable actions still need product polish.
+## Remaining risks
+- Route-level `error.tsx` coverage is still incomplete on dashboard child routes.
+- Authenticated staff persona browser testing still needs temporary demo auth accounts.

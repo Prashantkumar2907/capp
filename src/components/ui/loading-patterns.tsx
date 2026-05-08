@@ -77,3 +77,75 @@ export function ReceiptSkeleton() {
     </main>
   );
 }
+
+export function DashboardRouteSkeleton({
+  kind = "cards",
+  stats = 4,
+}: {
+  kind?: "analytics" | "board" | "cards" | "form" | "menu" | "orders" | "table";
+  stats?: number;
+}) {
+  return (
+    <div className="space-y-5" role="status" aria-label="Loading dashboard page">
+      <PageHeaderSkeleton />
+      {stats > 0 ? <StatGridSkeleton count={stats} /> : null}
+      {kind === "analytics" ? (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
+          <Skeleton className="h-96" />
+          <div className="space-y-3">
+            <Skeleton className="h-28" />
+            <Skeleton className="h-28" />
+            <Skeleton className="h-28" />
+          </div>
+        </div>
+      ) : null}
+      {kind === "board" ? (
+        <div className="grid gap-3 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="min-h-[480px]" />
+          ))}
+        </div>
+      ) : null}
+      {kind === "cards" ? (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} className="h-32" />
+          ))}
+        </div>
+      ) : null}
+      {kind === "form" ? (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <Skeleton className="h-80" />
+          <Skeleton className="h-96" />
+        </div>
+      ) : null}
+      {kind === "menu" ? (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <MenuTileSkeleton key={index} />
+          ))}
+        </div>
+      ) : null}
+      {kind === "orders" ? (
+        <div className="grid gap-3 xl:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <OrderCardSkeleton key={index} />
+          ))}
+        </div>
+      ) : null}
+      {kind === "table" ? (
+        <div className="rounded-2xl border bg-card p-3">
+          <div className="mb-3 flex flex-wrap gap-2">
+            <Skeleton className="h-10 min-w-64 flex-1" />
+            <Skeleton className="h-10 w-48" />
+          </div>
+          <div className="space-y-2">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <Skeleton key={index} className="h-16" />
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
