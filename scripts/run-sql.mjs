@@ -12,7 +12,7 @@ if (!databaseUrl) {
 
 const sqlDir = path.join(process.cwd(), "supabase");
 const files = (await fs.readdir(sqlDir)).filter((file) => file.endsWith(".sql")).sort();
-const client = new Client({ connectionString: databaseUrl });
+const client = new Client(pgConfig(databaseUrl));
 
 try {
   await client.connect();
@@ -32,4 +32,12 @@ try {
   console.log("database migration complete");
 } finally {
   await client.end();
+}
+
+function pgConfig(connectionString) {
+  const host = new URL(connectionString).hostname;
+  return {
+    connectionString,
+    ssl: host.endsWith(".pooler.supabase.com") ? { rejectUnauthorized: false } : undefined,
+  };
 }
