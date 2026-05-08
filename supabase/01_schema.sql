@@ -1,6 +1,7 @@
 drop table if exists feedback cascade;
 drop table if exists activity_logs cascade;
 drop table if exists subscriptions cascade;
+drop table if exists webhook_events cascade;
 drop table if exists payments cascade;
 drop table if exists order_items cascade;
 drop table if exists orders cascade;
@@ -153,6 +154,20 @@ create table payments (
   updated_at timestamptz not null default now()
 );
 
+create table webhook_events (
+  id uuid primary key default uuid_generate_v4(),
+  provider text not null,
+  event_id text not null,
+  event_type text not null,
+  payload_hash text not null,
+  status text not null default 'processing' check (status in ('processing','processed','ignored','failed')),
+  error text,
+  received_at timestamptz not null default now(),
+  processed_at timestamptz,
+  payload jsonb not null default '{}',
+  unique (provider, event_id)
+);
+
 create table subscriptions (
   id uuid primary key default uuid_generate_v4(),
   org_id uuid not null references organizations(id) on delete cascade,
@@ -202,4 +217,6 @@ create index idx_order_items_order on order_items(order_id);
 create index idx_order_items_branch on order_items(branch_id);
 create index idx_payments_branch on payments(branch_id);
 create index idx_payments_order on payments(order_id);
+create unique index idx_payments_transaction on payments(transaction_id) where transaction_id is not null;
+create index idx_webhook_events_provider_event on webhook_events(provider, event_id);
 create index idx_feedback_branch on feedback(branch_id);

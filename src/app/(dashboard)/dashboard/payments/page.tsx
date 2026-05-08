@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
+import { readApiResponse } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, formatDateTime, upiLink } from "@/lib/utils";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -44,15 +45,19 @@ export default function PaymentsPage() {
   });
 
   const updatePayment = useMutation({
-    mutationFn: async ({ payment, nextStatus }: { payment: PaymentRow; nextStatus: Payment["status"] }) => {
-      const { error } = await supabase
-        .from("payments")
-        .update({ status: nextStatus, transaction_id: payment.transaction_id || `manual-${Date.now()}` })
-        .eq("id", payment.id);
-      if (error) throw error;
+    mutationFn: async ({ payment, nextStatus }: { payment: PaymentRow; nextStatus: "completed" | "failed" }) => {
+      const response = await fetch(`/api/payments/${payment.id}/settle`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      await readApiResponse(response);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["payments"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["payments"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] }),
+      ]);
       toast.success("Payment updated");
     },
     onError: (error) => toast.error(error.message),

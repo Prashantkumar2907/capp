@@ -91,6 +91,10 @@ export const createOrderSchema = z.object({
   ).min(1).max(80),
 });
 
+export const paymentSettlementSchema = z.object({
+  status: z.enum(["completed", "failed"]),
+});
+
 export type SignInInput = z.infer<typeof signInSchema>;
 export type SignUpInput = z.infer<typeof signUpSchema>;
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
@@ -98,3 +102,4 @@ export type BranchInput = z.infer<typeof branchSchema>;
 export type BranchUpdateInput = z.infer<typeof branchUpdateSchema>;
 export type StaffInput = z.infer<typeof staffSchema>;
 export type StaffUpdateInput = z.infer<typeof staffUpdateSchema>;
+export type PaymentSettlementInput = z.infer<typeof paymentSettlementSchema>;

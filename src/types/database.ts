@@ -88,6 +88,12 @@ export interface Database {
           { foreignKeyName: "payments_branch_id_fkey"; columns: ["branch_id"]; referencedRelation: "branches"; referencedColumns: ["id"] },
         ];
       };
+      webhook_events: {
+        Row: WebhookEvent;
+        Insert: Partial<WebhookEvent> & Pick<WebhookEvent, "provider" | "event_id" | "event_type" | "payload_hash">;
+        Update: Partial<WebhookEvent>;
+        Relationships: [];
+      };
       subscriptions: {
         Row: Subscription;
         Insert: Partial<Subscription> & Pick<Subscription, "org_id">;
@@ -264,6 +270,19 @@ export type Payment = {
   provider_data: Json;
   created_at: string;
   updated_at: string;
+};
+
+export type WebhookEvent = {
+  id: string;
+  provider: string;
+  event_id: string;
+  event_type: string;
+  payload_hash: string;
+  status: "processing" | "processed" | "ignored" | "failed";
+  error: string | null;
+  received_at: string;
+  processed_at: string | null;
+  payload: Json;
 };
 
 export type Subscription = {

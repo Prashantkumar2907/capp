@@ -8,6 +8,7 @@ alter table tables enable row level security;
 alter table orders enable row level security;
 alter table order_items enable row level security;
 alter table payments enable row level security;
+alter table webhook_events enable row level security;
 alter table subscriptions enable row level security;
 alter table activity_logs enable row level security;
 alter table feedback enable row level security;
