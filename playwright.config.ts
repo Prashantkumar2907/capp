@@ -6,6 +6,7 @@ export default defineConfig({
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+    serviceWorkers: "block",
     trace: "on-first-retry",
   },
   webServer: {

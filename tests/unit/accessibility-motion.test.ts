@@ -9,6 +9,8 @@ test("root layout and CSS declare reduced-motion behavior", () => {
   assert.match(layout, /data-scroll-behavior="smooth"/);
   assert.match(css, /prefers-reduced-motion: reduce/);
   assert.match(css, /scroll-behavior: auto/);
+  assert.match(css, /overscroll-behavior: none/);
+  assert.match(css, /\.scrollable-inner[\s\S]*overscroll-behavior: contain/);
   assert.match(css, /\.skeleton-shine[\s\S]*animation: none/);
 });
 

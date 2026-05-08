@@ -5,6 +5,7 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import { useState } from "react";
 import { AuthProvider } from "@/features/auth/auth-provider";
+import { PwaInstallPrompt } from "@/components/shared/pwa-install-prompt";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -25,6 +26,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
         <AuthProvider>
           {children}
+          <PwaInstallPrompt />
           <Toaster richColors closeButton position="top-right" duration={2600} />
         </AuthProvider>
       </ThemeProvider>

@@ -10,12 +10,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Pagination } from "@/components/ui/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { readApiResponse } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, formatDateTime, upiLink } from "@/lib/utils";
+import { usePagination } from "@/hooks/use-pagination";
 import { useAuth } from "@/features/auth/auth-provider";
 import type { Order, Payment } from "@/types/database";
 
@@ -82,6 +84,9 @@ export default function PaymentsPage() {
     };
   }, [payments.data]);
 
+  const pagination = usePagination(filtered, 8);
+  const { setPage } = pagination;
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -103,9 +108,24 @@ export default function PaymentsPage() {
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-64 flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search payment" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <Input
+            className="pl-9"
+            placeholder="Search payment"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+          />
         </div>
-        <Select value={status} onChange={(event) => setStatus(event.target.value as PaymentStatusFilter)} className="w-48">
+        <Select
+          value={status}
+          onChange={(event) => {
+            setStatus(event.target.value as PaymentStatusFilter);
+            setPage(1);
+          }}
+          className="w-48"
+        >
           <option value="all">All statuses</option>
           <option value="pending">Pending</option>
           <option value="completed">Completed</option>
@@ -120,52 +140,62 @@ export default function PaymentsPage() {
           ))}
         </div>
       ) : filtered.length ? (
-        <div className="space-y-2">
-          {filtered.map((payment) => {
-            const upiHref =
-              branch?.upi_vpa && payment.status === "pending"
-                ? upiLink({ vpa: branch.upi_vpa, amount: Number(payment.amount), reference: payment.orders?.order_number ?? payment.id, merchant: organization?.name ?? branch.name })
-                : null;
-            return (
-              <Card key={payment.id}>
-                <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-numbers text-sm font-semibold">#{payment.orders?.order_number ?? payment.id.slice(0, 8)}</p>
-                      <PaymentBadge status={payment.status} />
-                      <Badge variant="secondary">{payment.method}</Badge>
+        <>
+          <div className="space-y-2">
+            {pagination.pageItems.map((payment) => {
+              const upiHref =
+                branch?.upi_vpa && payment.status === "pending"
+                  ? upiLink({ vpa: branch.upi_vpa, amount: Number(payment.amount), reference: payment.orders?.order_number ?? payment.id, merchant: organization?.name ?? branch.name })
+                  : null;
+              return (
+                <Card key={payment.id}>
+                  <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-numbers text-sm font-semibold">#{payment.orders?.order_number ?? payment.id.slice(0, 8)}</p>
+                        <PaymentBadge status={payment.status} />
+                        <Badge variant="secondary">{payment.method}</Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {payment.orders?.table_number ? `Table ${payment.orders.table_number} | ` : ""}
+                        {payment.orders?.customer_name || "Walk-in"} | {formatDateTime(payment.created_at)}
+                      </p>
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {payment.orders?.table_number ? `Table ${payment.orders.table_number} | ` : ""}
-                      {payment.orders?.customer_name || "Walk-in"} | {formatDateTime(payment.created_at)}
-                    </p>
-                  </div>
-                  <p className="font-numbers text-lg font-semibold">{formatCurrency(payment.amount)}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {upiHref ? (
-                      <a href={upiHref}>
-                        <Button variant="outline" size="sm">
-                          <ExternalLink className="h-3.5 w-3.5" />
-                          UPI
+                    <p className="font-numbers text-lg font-semibold">{formatCurrency(payment.amount)}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {upiHref ? (
+                        <a href={upiHref}>
+                          <Button variant="outline" size="sm">
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            UPI
+                          </Button>
+                        </a>
+                      ) : null}
+                      {payment.status !== "completed" ? (
+                        <Button size="sm" disabled={updatePayment.isPending} onClick={() => updatePayment.mutate({ payment, nextStatus: "completed" })}>
+                          Mark paid
                         </Button>
-                      </a>
-                    ) : null}
-                    {payment.status !== "completed" ? (
-                      <Button size="sm" disabled={updatePayment.isPending} onClick={() => updatePayment.mutate({ payment, nextStatus: "completed" })}>
-                        Mark paid
-                      </Button>
-                    ) : null}
-                    {payment.status === "pending" ? (
-                      <Button variant="ghost" size="sm" disabled={updatePayment.isPending} onClick={() => updatePayment.mutate({ payment, nextStatus: "failed" })}>
-                        Mark failed
-                      </Button>
-                    ) : null}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                      ) : null}
+                      {payment.status === "pending" ? (
+                        <Button variant="ghost" size="sm" disabled={updatePayment.isPending} onClick={() => updatePayment.mutate({ payment, nextStatus: "failed" })}>
+                          Mark failed
+                        </Button>
+                      ) : null}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+          <Pagination
+            page={pagination.currentPage}
+            pageSize={pagination.pageSize}
+            totalItems={pagination.totalItems}
+            totalPages={pagination.totalPages}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+          />
+        </>
       ) : (
         <EmptyState icon={CreditCard} title="No payments found" description="Payments are created automatically when orders are placed." />
       )}

@@ -97,7 +97,7 @@ export default function PublicPaymentPage() {
   };
 
   return (
-    <main className="min-h-screen bg-background px-4 py-5">
+    <main className="min-h-screen bg-background px-3 py-4 pb-24 sm:px-4 sm:py-5 xl:pb-5">
       <div className="mx-auto grid max-w-5xl gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="space-y-4">
           <Link href={`/order/${branchId}/${tableNumber}`}>
@@ -113,7 +113,7 @@ export default function PublicPaymentPage() {
                   <CreditCard className="h-5 w-5" />
                 </div>
                 <div>
-                  <h1 className="text-lg font-semibold">Review and send order</h1>
+                  <h1 className="text-lg font-semibold tracking-tight sm:text-xl">Review and send order</h1>
                   {meta.isLoading ? (
                     <Skeleton className="mt-2 h-3 w-56" />
                   ) : meta.error ? (
@@ -167,7 +167,7 @@ export default function PublicPaymentPage() {
           onSubmit={submitOrder}
         />
       </div>
-      <div className="fixed inset-x-0 bottom-0 border-t bg-card p-3 xl:hidden">
+      <div className="fixed inset-x-0 bottom-0 border-t bg-card p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] xl:hidden">
         <Button className="w-full" disabled={!cartReady || !cartItems.length || submitting || meta.isLoading || Boolean(meta.error)} onClick={submitOrder}>
           <Send className="h-4 w-4" />
           {submitting ? "Sending..." : "Place order"}

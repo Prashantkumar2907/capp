@@ -12,12 +12,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Pagination } from "@/components/ui/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { readApiResponse } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
 import { roleLabels, roles, type Role } from "@/lib/constants";
 import { initials } from "@/lib/utils";
+import { usePagination } from "@/hooks/use-pagination";
 import { useAuth } from "@/features/auth/auth-provider";
 import type { Staff } from "@/types/database";
 
@@ -80,6 +82,8 @@ export default function StaffPage() {
   });
 
   const filtered = staff.data?.filter((member) => filter === "all" || member.role === filter) ?? [];
+  const pagination = usePagination(filtered, 8);
+  const { setPage } = pagination;
 
   const edit = (member: Staff) => {
     setEditing(member);
@@ -92,7 +96,14 @@ export default function StaffPage() {
       <PageHeader title="Staff" description="Assign focused roles for each part of service." actions={<Button onClick={() => { setEditing(null); setForm(emptyForm); setDialogOpen(true); }}><Plus className="h-4 w-4" />Add staff</Button>} />
       <div className="flex flex-wrap gap-2">
         {(["all", ...roles] as Array<Role | "all">).map((role) => (
-          <button key={role} onClick={() => setFilter(role)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${filter === role ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-secondary"}`}>
+          <button
+            key={role}
+            onClick={() => {
+              setFilter(role);
+              setPage(1);
+            }}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${filter === role ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-secondary"}`}
+          >
             {role === "all" ? "All" : roleLabels[role]}
           </button>
         ))}
@@ -100,29 +111,43 @@ export default function StaffPage() {
       {staff.isLoading ? (
         <div className="space-y-2">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-16" />)}</div>
       ) : filtered.length ? (
-        <div className="space-y-2">
-          {filtered.map((member) => (
-            <Card key={member.id}>
-              <CardContent className="flex items-center gap-3 p-3">
-                <div className="font-numbers flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{initials(member.full_name)}</div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium">{member.full_name || "Unnamed"}</p>
-                    {member.id === currentStaff?.id ? <Badge variant="outline">You</Badge> : null}
+        <>
+          <div className="space-y-2">
+            {pagination.pageItems.map((member) => (
+              <Card key={member.id}>
+                <CardContent className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <div className="font-numbers flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{initials(member.full_name)}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-medium">{member.full_name || "Unnamed"}</p>
+                        {member.id === currentStaff?.id ? <Badge variant="outline">You</Badge> : null}
+                      </div>
+                      <p className="truncate text-xs text-muted-foreground">{member.email}</p>
+                    </div>
                   </div>
-                  <p className="truncate text-xs text-muted-foreground">{member.email}</p>
-                </div>
-                <Badge><Shield className="h-3 w-3" />{roleLabels[member.role]}</Badge>
-                {member.id !== currentStaff?.id ? (
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => edit(member)}><Edit2 className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => remove.mutate(member.id)}><Trash2 className="h-4 w-4" /></Button>
+                  <div className="flex items-center justify-between gap-2 sm:justify-end">
+                    <Badge><Shield className="h-3 w-3" />{roleLabels[member.role]}</Badge>
+                    {member.id !== currentStaff?.id ? (
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => edit(member)}><Edit2 className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => remove.mutate(member.id)}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <Pagination
+            page={pagination.currentPage}
+            pageSize={pagination.pageSize}
+            totalItems={pagination.totalItems}
+            totalPages={pagination.totalPages}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+          />
+        </>
       ) : (
         <EmptyState icon={Users} title="No staff found" description="Invite or create staff records for service roles." actionLabel="Add staff" onAction={() => setDialogOpen(true)} />
       )}

@@ -13,6 +13,7 @@ import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Pagination } from "@/components/ui/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { DishImage } from "@/components/features/menu/dish-image";
@@ -20,6 +21,7 @@ import { readApiResponse } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
 import { getBranchMenu } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/utils";
+import { usePagination } from "@/hooks/use-pagination";
 import { useAuth } from "@/features/auth/auth-provider";
 import type { Category, DishWithRelations } from "@/types/database";
 
@@ -53,6 +55,9 @@ export default function MenuPage() {
       return true;
     });
   }, [menu.data?.dishes, search, categoryFilter]);
+
+  const pagination = usePagination(dishes, 9);
+  const { setPage } = pagination;
 
   const uploadImage = async () => {
     if (!imageFile) return editingDish?.image_url ?? null;
@@ -144,9 +149,24 @@ export default function MenuPage() {
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-64 flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search dishes" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <Input
+            className="pl-9"
+            placeholder="Search dishes"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+          />
         </div>
-        <Select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="w-48">
+        <Select
+          value={categoryFilter}
+          onChange={(event) => {
+            setCategoryFilter(event.target.value);
+            setPage(1);
+          }}
+          className="w-48"
+        >
           <option value="all">All categories</option>
           {menu.data?.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
         </Select>
@@ -154,29 +174,40 @@ export default function MenuPage() {
       {menu.isLoading ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-32" />)}</div>
       ) : dishes.length ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {dishes.map((dish) => (
-            <Card key={dish.id}>
-              <CardContent className="flex gap-3 p-3">
-                <DishImage src={dish.image_url} alt={dish.name} className="h-20 w-20 shrink-0 rounded-2xl" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="truncate text-sm font-semibold">{dish.name}</h2>
-                    {dish.is_veg ? <Leaf className="h-3.5 w-3.5 text-success" /> : null}
-                  </div>
-                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{dish.description || dish.categories?.name || "No description"}</p>
-                  <div className="mt-3 flex items-center justify-between">
-                    <span className="font-numbers text-sm font-semibold text-primary">{formatCurrency(dish.price)}</span>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => editDish(dish)}><Edit2 className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => removeDish.mutate(dish.id)}><Trash2 className="h-4 w-4" /></Button>
+        <>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {pagination.pageItems.map((dish) => (
+              <Card key={dish.id}>
+                <CardContent className="flex gap-3 p-3">
+                  <DishImage src={dish.image_url} alt={dish.name} className="h-20 w-20 shrink-0 rounded-2xl" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h2 className="truncate text-sm font-semibold">{dish.name}</h2>
+                      {dish.is_veg ? <Leaf className="h-3.5 w-3.5 text-success" /> : null}
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{dish.description || dish.categories?.name || "No description"}</p>
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="font-numbers text-sm font-semibold text-primary">{formatCurrency(dish.price)}</span>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => editDish(dish)}><Edit2 className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => removeDish.mutate(dish.id)}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <Pagination
+            page={pagination.currentPage}
+            pageSize={pagination.pageSize}
+            totalItems={pagination.totalItems}
+            totalPages={pagination.totalPages}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            pageSizeOptions={[9, 18, 36]}
+          />
+        </>
       ) : (
         <EmptyState icon={UtensilsCrossed} title="No dishes found" description="Add dishes or adjust the filters." actionLabel="Add dish" onAction={() => setDishOpen(true)} />
       )}

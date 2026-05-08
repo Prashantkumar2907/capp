@@ -12,8 +12,10 @@ import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { OrderCard } from "@/components/features/orders/order-card";
+import { Pagination } from "@/components/ui/pagination";
 import { orderStatuses, orderStatusLabels, type OrderItemStatus, type OrderStatus } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
+import { usePagination } from "@/hooks/use-pagination";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
 import { useAuth } from "@/features/auth/auth-provider";
 
@@ -47,6 +49,9 @@ export default function OrdersPage() {
       revenue: orders.filter((order) => order.status !== "cancelled").reduce((sum, order) => sum + Number(order.total), 0),
     };
   }, [orders]);
+
+  const pagination = usePagination(filtered, 6);
+  const { setPage } = pagination;
 
   const updateStatus = async (orderId: string, nextStatus: OrderStatus) => {
     setBusyId(orderId);
@@ -89,9 +94,24 @@ export default function OrdersPage() {
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-64 flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search order, table, customer" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <Input
+            className="pl-9"
+            placeholder="Search order, table, customer"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+          />
         </div>
-        <Select value={status} onChange={(event) => setStatus(event.target.value as OrderStatus | "all")} className="w-48">
+        <Select
+          value={status}
+          onChange={(event) => {
+            setStatus(event.target.value as OrderStatus | "all");
+            setPage(1);
+          }}
+          className="w-48"
+        >
           <option value="all">All statuses</option>
           {orderStatuses.map((item) => (
             <option key={item} value={item}>
@@ -99,7 +119,14 @@ export default function OrdersPage() {
             </option>
           ))}
         </Select>
-        <Select value={source} onChange={(event) => setSource(event.target.value as SourceFilter)} className="w-48">
+        <Select
+          value={source}
+          onChange={(event) => {
+            setSource(event.target.value as SourceFilter);
+            setPage(1);
+          }}
+          className="w-48"
+        >
           <option value="all">All sources</option>
           <option value="qr_customer">QR customer</option>
           <option value="waiter">Waiter</option>
@@ -115,11 +142,21 @@ export default function OrdersPage() {
       ) : error ? (
         <div className="rounded-2xl border bg-card p-6 text-sm text-destructive">{error}</div>
       ) : filtered.length ? (
-        <div className="grid gap-3 xl:grid-cols-2">
-          {filtered.map((order) => (
-            <OrderCard key={order.id} order={order} busy={busyId === order.id} onStatusChange={(nextStatus) => void updateStatus(order.id, nextStatus)} />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-3 xl:grid-cols-2">
+            {pagination.pageItems.map((order) => (
+              <OrderCard key={order.id} order={order} busy={busyId === order.id} onStatusChange={(nextStatus) => void updateStatus(order.id, nextStatus)} />
+            ))}
+          </div>
+          <Pagination
+            page={pagination.currentPage}
+            pageSize={pagination.pageSize}
+            totalItems={pagination.totalItems}
+            totalPages={pagination.totalPages}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+          />
+        </>
       ) : (
         <EmptyState icon={ShoppingCart} title="No orders in this view" description="Change filters or create a waiter order to start service." />
       )}

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CAPP">
+  <rect width="512" height="512" rx="112" fill="#128c7e"/>
+  <circle cx="256" cy="256" r="154" fill="#f6f7f2"/>
+  <path d="M170 180h172v42H170zm0 72h172v42H170zm0 72h120v42H170z" fill="#128c7e"/>
+  <path d="M342 320c28 0 50 22 50 50v16h-100v-16c0-28 22-50 50-50z" fill="#17231f"/>
+</svg>

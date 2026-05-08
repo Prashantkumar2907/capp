@@ -31,7 +31,11 @@ export async function proxy(request: NextRequest) {
     path.startsWith("/auth/callback") ||
     path.startsWith("/order/") ||
     path.startsWith("/receipt/") ||
-    path.startsWith("/api/");
+    path.startsWith("/api/") ||
+    path === "/manifest.webmanifest" ||
+    path === "/sw.js" ||
+    path === "/offline.html" ||
+    path.startsWith("/icons/");
 
   if (!user && !publicPath) {
     const url = request.nextUrl.clone();
@@ -50,5 +54,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|offline.html|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
 };

@@ -79,8 +79,8 @@ export default function PublicOrderPage() {
   };
 
   return (
-    <main className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b bg-background/90 px-4 py-3 backdrop-blur">
+    <main className="min-h-screen bg-background pb-24 xl:pb-0">
+      <header className="sticky top-0 z-40 border-b bg-background/90 px-3 py-3 backdrop-blur sm:px-4">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -99,13 +99,15 @@ export default function PublicOrderPage() {
           </Badge>
         </div>
       </header>
-      <div className="mx-auto grid max-w-6xl gap-4 px-4 py-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="mx-auto grid max-w-6xl gap-4 px-3 py-4 sm:px-4 sm:py-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="space-y-4">
           <Card>
             <CardContent className="space-y-3 p-4">
               <div>
-                <h1 className="text-xl font-semibold">Order at your table</h1>
-                <p className="mt-1 text-sm text-muted-foreground">Choose dishes, add item notes, and send the order straight to the kitchen queue.</p>
+                <h1 className="text-lg font-semibold tracking-tight sm:text-xl md:text-2xl">Order at your table</h1>
+                <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground sm:text-sm">
+                  Choose dishes, add item notes, and send the order straight to the kitchen queue.
+                </p>
               </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -114,11 +116,11 @@ export default function PublicOrderPage() {
             </CardContent>
           </Card>
           <div className="hide-scrollbar flex gap-2 overflow-x-auto pb-1">
-            <button className={`rounded-full px-3 py-2 text-xs font-medium ${categoryId === "all" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground"}`} onClick={() => setCategoryId("all")}>
+            <button className={`touch-target shrink-0 rounded-full px-3 py-2 text-xs font-medium ${categoryId === "all" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground"}`} onClick={() => setCategoryId("all")}>
               All
             </button>
             {menu.data?.categories.map((category) => (
-              <button key={category.id} className={`rounded-full px-3 py-2 text-xs font-medium ${categoryId === category.id ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground"}`} onClick={() => setCategoryId(category.id)}>
+              <button key={category.id} className={`touch-target shrink-0 rounded-full px-3 py-2 text-xs font-medium ${categoryId === category.id ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground"}`} onClick={() => setCategoryId(category.id)}>
                 {category.name}
               </button>
             ))}
@@ -167,7 +169,7 @@ export default function PublicOrderPage() {
         </aside>
       </div>
       {cartItems.length ? (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-card p-3 shadow-sm xl:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-card p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-sm xl:hidden">
           <Link href={`/order/${branchId}/${tableNumber}/payment`}>
             <Button className="w-full">
               <ShoppingBag className="h-4 w-4" />
