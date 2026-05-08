@@ -5,13 +5,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatCurrency(value: number | string | null | undefined) {
+export function formatCurrency(value: number | string | null | undefined, currency = "INR") {
   const amount = Number(value ?? 0);
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
-    currency: "INR",
+    currency,
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+export function formatDate(value: string | Date) {
+  return new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+  }).format(new Date(value));
 }
 
 export function formatDateTime(value: string | Date) {
@@ -39,6 +45,22 @@ export function timeAgo(value: string | Date) {
   return "just now";
 }
 
+export function capSentence(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return `${trimmed[0].toUpperCase()}${trimmed.slice(1)}`;
+}
+
+export function truncate(value: string, maxLength = 80) {
+  if (value.length <= maxLength) return value;
+  if (maxLength <= 3) return value.slice(0, maxLength);
+  return `${value.slice(0, maxLength - 3).trimEnd()}...`;
+}
+
+export function isEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
 export function slugify(value: string) {
   return value
     .toLowerCase()
@@ -55,6 +77,25 @@ export function initials(value?: string | null) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("");
+}
+
+export function sleep(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+      return;
+    }
+
+    const timeout = globalThis.setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        globalThis.clearTimeout(timeout);
+        reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+      },
+      { once: true }
+    );
+  });
 }
 
 export function orderNumber() {

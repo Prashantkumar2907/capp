@@ -1,51 +1,59 @@
-# Loop 1
+# Loop 1 Report
 
-## Inspected
+## What was inspected
+- App Router route grouping, reusable UI primitives, shared utility/type placement, docs, SQL schema, seed data, unit/API/UI test coverage, and public QR ordering.
+- External references reviewed: Motion/Framer Motion patterns, Next.js examples, Supabase examples, shadcn/ui component-directory conventions, tailwind animation libraries, and Magic UI copy-paste component style.
 
-Reviewed the App Router structure, shared component folders, API route boundaries, Supabase SQL reset behavior, current tests, public QR ordering, receipts, dashboard loading behavior, and documentation coverage.
+## What was missing or weak
+- The documented `src/lib/utils`, `src/lib/enums`, and `src/lib/types` folder contracts were not present as reusable directories.
+- Buttons did not expose a typed loading state, and generic table/form primitives were missing for future production workflows.
 
-## Missing Or Weak
+## What was implemented
+- Moved shared helpers to `src/lib/utils/index.ts` while keeping `@/lib/utils` imports stable.
+- Added reusable enums in `src/lib/enums/index.ts` and portable app DTOs in `src/lib/types/index.ts`.
+- Added typed loading support to `Button`, `SkeletonList`, a generic `DataTable`, and a reusable `FormField`.
 
-Public routes were not grouped under `src/app/(public)`, dashboard layout lived in `src/components/layout`, route-level loading files were missing, receipt and protected dashboard boot states used full-page spinners, and `npm run db:migrate` could reset a non-local database without an explicit safety flag.
+## File-structure or architecture changes made
+- Established the documented folder-based shared contracts under `src/lib/utils`, `src/lib/enums`, and `src/lib/types`.
+- Updated `docs/architecture/file-structure.md` with placement guidance for reusable UI, enums, types, and utilities.
 
-## Implemented
+## Tests run
+- `npm run lint`
+- `npm run typecheck`
+- `npm run build`
+- `npm run test`
+- `npm run test:api`
+- `npm run test:ui`
+- `npm audit --audit-level=moderate`
+- `npm run db:migrate` skipped destructive reset because the configured database is not local.
+- `npm run db:verify`
 
-Moved marketing, auth, OAuth callback, QR ordering, and receipt routes under `src/app/(public)`. Moved the dashboard shell to `src/components/layouts`. Added reusable skeleton loading patterns and route-level loading files for dashboard, QR ordering, payment review, and receipt pages. Replaced the dashboard boot spinner and receipt loading spinner with skeleton layouts. Added a safe default to `scripts/run-sql.mjs` so destructive SQL resets only run for local databases or when `ALLOW_DESTRUCTIVE_DB_RESET=1` is set.
+## Demo data or personas used
+- Public customer QR ordering was opened for branch `b0000000-0000-0000-0000-000000000099`, table `1`.
+- Unit/API/UI fixtures continued covering owner, admin, manager, waiter, kitchen, cashier, and QR customer personas.
 
-## File-Structure Or Architecture Changes
+## Skeleton states added or verified
+- Verified public QR ordering skeleton replacement through Playwright desktop, tablet, and mobile projects.
+- Added reusable `SkeletonList` for route/table/list loading states.
 
-Created `docs/architecture/file-structure.md` to document route groups, component ownership, data layers, SQL, scripts, tests, and placement examples.
+## Readability/code-quality cleanup performed
+- Centralized generic helpers and contracts into stable shared folders.
+- Added explicit typed props for new UI primitives instead of embedding ad hoc table/form patterns in pages.
 
-## Tests Run
+## UI/UX and animation checks performed
+- Verified the public ordering page in the in-app browser at `http://localhost:3000/order/b0000000-0000-0000-0000-000000000099/1`.
+- Checked console errors/warnings for the opened public ordering page; none were reported.
+- Existing Playwright checks verified no horizontal overflow across desktop, tablet, and mobile.
 
-`npm run lint`, `npm run typecheck`, `npm run build`, `npm run test`, `npm run test:api`, `npm run test:ui`, `npm audit --audit-level=moderate`, `npm run db:migrate`, and `npm run db:verify`.
+## API/query/security checks performed
+- API contract tests verified validation before database work for orders, payments, staff, branch ids, and Razorpay signatures.
+- DB verification passed without printing secrets.
 
-The first UI attempt exposed a port collision on `3000`; reran with `NEXT_PUBLIC_APP_URL=http://localhost:3100` and `PORT=3100`. The first new QR ordering test exposed a cart context render loop, which was fixed before the final passing run.
+## Accessibility, performance, reliability, and production-readiness checks performed
+- New `Button` loading state uses `aria-busy` and disables duplicate action clicks.
+- `DataTable` includes keyboard row activation when row actions are provided.
+- Reduced-motion behavior remained covered by the existing unit and UI tests.
 
-## Demo Data Or Personas Used
-
-Inspected the existing demo restaurant seed and exercised the public customer QR ordering persona with mocked restaurant menu data in Playwright.
-
-## Skeleton States Added Or Verified
-
-Added dashboard, public menu, public payment, and receipt route skeletons. Verified shared skeleton patterns match final card, menu tile, stat, and receipt layouts. Added a delayed-response UI test that confirms public QR skeletons appear and are replaced by real menu content.
-
-## Readability And Code Quality Cleanup
-
-Moved layout code into the requested `components/layouts` layer and centralized reusable loading patterns.
-
-## UI/UX And Animation Checks
-
-Reduced reliance on full-page spinners for route-sized loading states. Existing subtle skeleton animation remains shared through the UI skeleton component. Checked public ordering at desktop, tablet, and mobile widths for visible primary actions and horizontal overflow.
-
-## API, Query, And Security Checks
-
-Identified destructive DB reset risk and made migration automation safe by default for non-local database URLs without printing connection details. Confirmed the QR loading test does not require real customer data or live provider credentials.
-
-## Accessibility, Performance, Reliability, And Production Checks
-
-Skeletons avoid layout collapse during slow data loading. The DB reset guard reduces operational risk for production-like Supabase projects. Fixed public cart context writes so unchanged branch/table context does not trigger repeat renders.
-
-## Remaining Risks
-
-API routes still need stronger validation, consistent response envelopes, rate-limit readiness, idempotency, and server-side permission checks. Demo seed data is still too small for sales and QA coverage.
+## Remaining risks
+- Manual browser QA was limited to the public ordering flow for this loop.
+- Several dashboard child routes still need route-level `loading.tsx` skeletons; that is queued for loop 2.

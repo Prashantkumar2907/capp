@@ -14,7 +14,7 @@ Every route that fetches data should include a `loading.tsx` skeleton matching t
 
 ## Components
 
-`src/components/ui` contains reusable atoms such as buttons, inputs, cards, badges, dialogs, tables, skeletons, toasts, switches, tabs, tooltips, and shared loading patterns. UI components should be generic and unaware of restaurant domain rules.
+`src/components/ui` contains reusable atoms and small molecules such as buttons, inputs, cards, badges, dialogs, typed data tables, form fields, skeletons, toasts, switches, tabs, tooltips, and shared loading patterns. UI components should be generic and unaware of restaurant domain rules.
 
 `src/components/layouts` contains app shells and high-level navigation layouts, such as the dashboard shell and future public/auth shells.
 
@@ -28,7 +28,7 @@ Every route that fetches data should include a `loading.tsx` skeleton matching t
 
 `src/lib/validation` contains Zod schemas and request contracts shared by forms, server actions, and API routes.
 
-`src/lib/constants`, `src/lib/enums`, `src/lib/types`, and `src/types` contain domain enums, status transitions, typed DTOs, and generated or hand-maintained database types.
+`src/lib/constants`, `src/lib/enums`, `src/lib/types`, `src/lib/utils`, and `src/types` contain domain enums, status transitions, typed DTOs, formatting helpers, text helpers, async helpers, and generated or hand-maintained database types. Keep reusable generic primitives in the folder-based shared layers so `@/lib/utils`, `@/lib/enums`, and `@/lib/types` remain stable imports across projects.
 
 `src/lib/actions` should be used for server actions that need validation, permission checks, audit logging, or trusted writes.
 

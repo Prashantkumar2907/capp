@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculateTotals, formatCurrency, initials, slugify, upiLink } from "../../src/lib/utils";
+import { ThemeMode, UserRole } from "../../src/lib/enums";
+import { calculateTotals, capSentence, formatCurrency, initials, isEmail, slugify, truncate, upiLink } from "../../src/lib/utils";
 
 test("calculateTotals handles tax-inclusive restaurant pricing", () => {
   const total = calculateTotals(105, 5, true);
@@ -20,5 +21,14 @@ test("utility formatting keeps restaurant UI predictable", () => {
   assert.equal(slugify("Spice Garden Cafe!"), "spice-garden-cafe");
   assert.equal(initials("Prashant Kumar"), "PK");
   assert.equal(formatCurrency(499), "\u20b9499");
+  assert.equal(capSentence(" masala works"), "Masala works");
+  assert.equal(truncate("A very long restaurant note", 12), "A very lo...");
+  assert.equal(isEmail("owner@demo.capp.local"), true);
   assert.match(upiLink({ vpa: "merchant@upi", amount: 250, reference: "ORD-1", merchant: "CAPP" }), /^upi:\/\/pay\?/);
+});
+
+test("shared enums expose portable app contracts", () => {
+  assert.equal(UserRole.Owner, "owner");
+  assert.equal(UserRole.Kitchen, "kitchen");
+  assert.equal(ThemeMode.System, "system");
 });
