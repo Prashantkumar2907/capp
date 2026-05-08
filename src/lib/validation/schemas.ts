@@ -59,10 +59,16 @@ export const dishSchema = z.object({
   description: z.string().max(500).optional(),
   price: z.number().min(0).max(100000),
   category_id: dbUuidSchema.nullable().optional(),
+  branch_id: dbUuidSchema.nullable().optional(),
+  image_url: z.url().max(500).nullable().optional(),
   is_veg: z.boolean(),
   is_active: z.boolean(),
   prep_time_mins: z.number().int().min(1).max(240),
 });
+
+export const dishUpdateSchema = dishSchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, "At least one dish field is required");
 
 export const tableSchema = z.object({
   label: z.string().max(80).optional(),
@@ -107,5 +113,7 @@ export type BranchInput = z.infer<typeof branchSchema>;
 export type BranchUpdateInput = z.infer<typeof branchUpdateSchema>;
 export type StaffInput = z.infer<typeof staffSchema>;
 export type StaffUpdateInput = z.infer<typeof staffUpdateSchema>;
+export type DishInput = z.infer<typeof dishSchema>;
+export type DishUpdateInput = z.infer<typeof dishUpdateSchema>;
 export type PaymentSettlementInput = z.infer<typeof paymentSettlementSchema>;
 export type OrderStatusUpdateInput = z.infer<typeof orderStatusUpdateSchema>;

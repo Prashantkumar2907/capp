@@ -52,4 +52,6 @@ Add a new cashier settlement endpoint in `src/app/api/payments/...`, validate it
 
 Add a new kitchen UI widget in `src/components/features/kitchen`, keep shared badges/buttons in `src/components/ui` or `src/components/shared`, and keep order transition rules centralized in `src/lib/constants` or a domain service.
 
+Add menu mutations behind `src/app/api/menu/...`, validate request bodies in `src/lib/validation`, and keep trusted Supabase writes in `src/lib/supabase/menu-management.ts`. Client menu editors may upload media to public storage, but prices, category ownership, branch availability, and restaurant ownership must be verified server-side.
+
 Add a new migration as the next ordered file in `supabase`, update `src/types/database.ts` if the application reads the new shape, and add a DB or API verification test in `tests`.

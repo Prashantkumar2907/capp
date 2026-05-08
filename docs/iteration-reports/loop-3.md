@@ -1,49 +1,62 @@
-# Loop 3
+# Loop 3 Report
 
-## Inspected
+## What was inspected
+- Menu editor write paths, Supabase management services, role guards, validation schemas, API response contracts, App Router API placement, dashboard menu protection, and related tests.
 
-Reviewed Supabase schema, seed data, database verification, database types, order statuses, route tests, and docs after the order API refactor.
+## What was missing or weak
+- Dashboard menu dish writes were performed directly from the client with Supabase calls.
+- Price, category ownership, branch assignment, and manager branch access needed a server-side trust boundary.
+- There was no reusable staff-role guard for feature-specific service permissions beyond owner/admin.
 
-## Missing Or Weak
+## What was implemented
+- Added server-side menu mutation services in `src/lib/supabase/menu-management.ts`.
+- Added `POST /api/menu/dishes`, `PATCH /api/menu/dishes/[dishId]`, and `DELETE /api/menu/dishes/[dishId]`.
+- Updated the menu editor to call the API for dish create, update, and delete while keeping client storage upload and query invalidation.
+- Added reusable `requireStaffRole` permission guard.
+- Added dish validation contracts for create/update payloads including branch and image URL validation.
 
-Seed data only represented one generic restaurant and lacked realistic plan diversity, branch diversity, role coverage, payment states, feedback, activity logs, image placeholders, disabled staff, and cloud-kitchen/takeaway scenarios. The order status model did not include paid, refunded, or failed states.
+## File-structure or architecture changes made
+- Kept API routes in `src/app/api/menu/...`.
+- Kept trusted Supabase writes and permission checks in `src/lib/supabase/menu-management.ts`.
+- Updated file-structure docs with menu mutation placement guidance.
 
-## Implemented
+## Tests run
+- `npm run lint`
+- `npm run typecheck`
+- `npm run build`
+- `npm run test`
+- `npm run test:api`
+- `npm run test:ui`
+- `npm audit --audit-level=moderate`
+- `npm run db:migrate` skipped destructive reset because the configured database is not local.
+- `npm run db:verify`
 
-Expanded the demo seed to cover Lotus Tea Room, Masala Works, Harbour Spice Group, and Night Owl Bowls across starter, growth, enterprise, and pro plans. Added realistic branches, tables, categories, dishes, image placeholders, availability differences, staff roles, disabled staff, orders, order items, payments, subscriptions, feedback, and activity logs. Extended order statuses to include `paid`, `refunded`, and `failed` in SQL, constants, TypeScript types, queries, and badges.
+## Demo data or personas used
+- Manager/menu workflow was exercised through server permission contracts.
+- Manual browser QA confirmed unauthenticated access to `/dashboard/menu` redirects to `/sign-in?redirect=%2Fdashboard%2Fmenu`.
 
-## File-Structure Or Architecture Changes
+## Skeleton states added or verified
+- Existing dashboard menu skeletons remained covered by build and UI smoke checks.
+- Public QR skeletons were reverified by the UI suite across desktop, tablet, and mobile.
 
-Added `docs/demo-data.md` and kept seed coverage in `supabase/05_seed_demo.sql`. Added seed-focused unit tests in `tests/unit`.
+## Readability/code-quality cleanup performed
+- Moved dish write rules out of the page component and into a focused service.
+- Reused API response helpers and shared validation instead of duplicating mutation checks in UI code.
 
-## Tests Run
+## UI/UX and animation checks performed
+- In-app browser QA verified the protected menu route does not expose editor controls to signed-out users.
+- UI suite confirmed public pages still render and navigate correctly after the new API routes were added.
 
-`npm run lint`, `npm run typecheck`, `npm run build`, `npm run test`, `npm run test:api`, `npm run test:ui`, `npm audit --audit-level=moderate`, `npm run db:migrate`, and `npm run db:verify`.
+## API/query/security checks performed
+- API tests verify malformed dish prices, UUIDs, image URLs, prep times, and route ids fail before auth or database work.
+- Menu writes now derive `org_id` from active staff, verify category tenant scope, and restrict managers to their assigned branch.
+- Client-provided branch and category ids are treated as claims that must be verified server-side.
 
-## Demo Data Or Personas Used
+## Accessibility, performance, reliability, and production-readiness checks performed
+- Existing keyboard and reduced-motion UI tests continued to pass.
+- Build output confirms the new API routes are server-rendered/dynamic boundaries.
+- No secrets or credential values were printed.
 
-Covered small cafe owner, casual dining admin/waiter, multi-branch manager/kitchen, cloud-kitchen cashier, disabled staff, and public customer QR scenarios.
-
-## Skeleton States Added Or Verified
-
-Re-ran the delayed public QR ordering skeleton test across desktop, tablet, and mobile. No new skeleton files were needed in this loop.
-
-## Readability And Code Quality Cleanup
-
-Centralized expanded order statuses in constants/types so seed, UI badges, queries, and schema use one vocabulary.
-
-## UI/UX And Animation Checks
-
-Verified public ordering and auth flows still pass responsive browser checks at desktop, tablet, and mobile widths after status and seed changes.
-
-## API, Query, And Security Checks
-
-Added tests to ensure demo UUIDs are database-valid, fake emails are used, all roles are represented, and paid/failed/refunded statuses exist in centralized status constants. `db:migrate` safely skipped destructive reset against the non-local configured database.
-
-## Accessibility, Performance, Reliability, And Production Checks
-
-Demo media uses stable placeholders with existing UI fallback behavior. Seed data now includes payment failure, refund, disabled staff, out-of-stock activity, and branch-specific availability scenarios for reliability and access-control review.
-
-## Remaining Risks
-
-The expanded seed was not applied to the configured non-local database because destructive reset is guarded. A disposable local or demo Supabase database should be migrated with `ALLOW_DESTRUCTIVE_DB_RESET=1` to fully validate SQL execution and refreshed demo records.
+## Remaining risks
+- Category mutations still use direct client Supabase writes and should move behind server APIs.
+- Authenticated browser testing for owner/admin/manager menu edits still needs temporary demo auth users.

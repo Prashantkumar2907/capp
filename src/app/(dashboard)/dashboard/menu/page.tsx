@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { DishImage } from "@/components/features/menu/dish-image";
+import { readApiResponse } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
 import { getBranchMenu } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/utils";
@@ -70,19 +71,27 @@ export default function MenuPage() {
         description: dishForm.description || null,
         price: dishForm.price,
         category_id: dishForm.category_id || null,
+        branch_id: branch?.id ?? null,
         is_veg: dishForm.is_veg,
         is_active: dishForm.is_active,
         prep_time_mins: dishForm.prep_time_mins,
         image_url,
       };
       if (editingDish) {
-        const { error } = await supabase.from("dishes").update(payload).eq("id", editingDish.id);
-        if (error) throw error;
+        const response = await fetch(`/api/menu/dishes/${editingDish.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        await readApiResponse(response);
         return;
       }
-      const { data, error } = await supabase.from("dishes").insert({ ...payload, org_id: organization!.id }).select("*").single();
-      if (error) throw error;
-      if (data && branch) await supabase.from("branch_dishes").insert({ branch_id: branch.id, dish_id: data.id });
+      const response = await fetch("/api/menu/dishes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      await readApiResponse(response);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["menu"] });
@@ -117,8 +126,8 @@ export default function MenuPage() {
 
   const removeDish = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("dishes").delete().eq("id", id);
-      if (error) throw error;
+      const response = await fetch(`/api/menu/dishes/${id}`, { method: "DELETE" });
+      await readApiResponse(response);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["menu"] }),
   });

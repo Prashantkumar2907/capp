@@ -32,8 +32,12 @@ export async function getActiveStaffContext(admin: ReturnType<typeof createAdmin
 }
 
 export function requireOwnerOrAdmin(staff: Staff): StaffContextResult {
-  if (staff.role !== "owner" && staff.role !== "admin") {
-    return permissionFailure(403, "ROLE_FORBIDDEN", "Owner or admin access is required");
+  return requireStaffRole(staff, ["owner", "admin"], "Owner or admin access is required");
+}
+
+export function requireStaffRole(staff: Staff, roles: readonly Staff["role"][], message = "This role cannot perform this action"): StaffContextResult {
+  if (!roles.includes(staff.role)) {
+    return permissionFailure(403, "ROLE_FORBIDDEN", message);
   }
 
   return { ok: true, staff };
