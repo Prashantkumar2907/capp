@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { BarChart3, Clock, IndianRupee, ShoppingBag, Star } from "lucide-react";
@@ -27,30 +27,6 @@ export default function AnalyticsPage() {
     enabled: !!branch,
   });
 
-  const revenueData = useMemo(() => {
-    const map = new Map<string, { date: string; revenue: number; orders: number }>();
-    summary.data?.orders.forEach((order) => {
-      const date = new Intl.DateTimeFormat("en-IN", { month: "short", day: "numeric" }).format(new Date(order.created_at));
-      const current = map.get(date) ?? { date, revenue: 0, orders: 0 };
-      current.revenue += Number(order.total);
-      current.orders += 1;
-      map.set(date, current);
-    });
-    return [...map.values()];
-  }, [summary.data?.orders]);
-
-  const statusData = useMemo(() => {
-    const map = new Map<string, number>();
-    summary.data?.orders.forEach((order) => map.set(order.status, (map.get(order.status) ?? 0) + 1));
-    return [...map.entries()].map(([name, value]) => ({ name, value }));
-  }, [summary.data?.orders]);
-
-  const sourceData = useMemo(() => {
-    const map = new Map<string, number>();
-    summary.data?.orders.forEach((order) => map.set(order.order_source.replace("_", " "), (map.get(order.order_source.replace("_", " ")) ?? 0) + 1));
-    return [...map.entries()].map(([source, orders]) => ({ source, orders }));
-  }, [summary.data?.orders]);
-
   if (summary.isLoading) {
     return (
       <div className="space-y-5">
@@ -69,6 +45,9 @@ export default function AnalyticsPage() {
   }
 
   const data = summary.data;
+  const revenueData = data?.dailyRevenue ?? [];
+  const statusData = data?.statusCounts ?? [];
+  const sourceData = data?.sourceCounts ?? [];
 
   return (
     <div className="space-y-5">
@@ -84,9 +63,9 @@ export default function AnalyticsPage() {
         }
       />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Revenue" value={formatCurrency(data?.orders.reduce((sum, order) => sum + Number(order.total), 0) ?? 0)} icon={IndianRupee} />
-        <StatCard label="Orders" value={data?.orders.length ?? 0} icon={ShoppingBag} tone="info" />
-        <StatCard label="Average order" value={formatCurrency(data?.averageOrder ?? 0)} icon={BarChart3} tone="warning" />
+        <StatCard label="Revenue" value={formatCurrency(data?.rangeRevenue ?? 0)} icon={IndianRupee} />
+        <StatCard label="Orders" value={data?.ordersInRange ?? 0} icon={ShoppingBag} tone="info" />
+        <StatCard label="Average order" value={formatCurrency(data?.rangeAverageOrder ?? 0)} icon={BarChart3} tone="warning" />
         <StatCard label="Average rating" value={data?.averageRating ? data.averageRating.toFixed(1) : "No ratings"} icon={Star} tone="success" />
       </div>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
