@@ -31,6 +31,11 @@ export const branchSchema = z.object({
   table_count: z.number().int().min(1).max(200),
 });
 
+export const branchUpdateSchema = branchSchema
+  .extend({ is_active: z.boolean().optional() })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, "At least one branch field is required");
+
 export const staffSchema = z.object({
   full_name: z.string().min(2).max(100),
   email: z.email(),
@@ -38,6 +43,10 @@ export const staffSchema = z.object({
   role: z.enum(roles.filter((role) => role !== "owner") as ["admin", "manager", "waiter", "kitchen", "cashier"]),
   branch_id: dbUuidSchema.nullable().optional(),
 });
+
+export const staffUpdateSchema = staffSchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, "At least one staff field is required");
 
 export const categorySchema = z.object({
   name: z.string().min(2).max(60),
@@ -85,3 +94,7 @@ export const createOrderSchema = z.object({
 export type SignInInput = z.infer<typeof signInSchema>;
 export type SignUpInput = z.infer<typeof signUpSchema>;
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
+export type BranchInput = z.infer<typeof branchSchema>;
+export type BranchUpdateInput = z.infer<typeof branchUpdateSchema>;
+export type StaffInput = z.infer<typeof staffSchema>;
+export type StaffUpdateInput = z.infer<typeof staffUpdateSchema>;

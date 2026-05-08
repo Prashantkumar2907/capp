@@ -14,6 +14,7 @@ import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
+import { readApiResponse } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
 import { roleLabels, roles, type Role } from "@/lib/constants";
 import { initials } from "@/lib/utils";
@@ -43,13 +44,22 @@ export default function StaffPage() {
 
   const save = useMutation({
     mutationFn: async () => {
+      const payload = { ...form, phone: form.phone || undefined, branch_id: branch?.id ?? null };
       if (editing) {
-        const { error } = await supabase.from("staff").update(form).eq("id", editing.id);
-        if (error) throw error;
+        const response = await fetch(`/api/staff/${editing.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...form, phone: form.phone || undefined }),
+        });
+        await readApiResponse(response);
         return;
       }
-      const { error } = await supabase.from("staff").insert({ ...form, org_id: organization!.id, branch_id: branch?.id ?? null });
-      if (error) throw error;
+      const response = await fetch("/api/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      await readApiResponse(response);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["staff"] });
@@ -63,8 +73,8 @@ export default function StaffPage() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("staff").delete().eq("id", id);
-      if (error) throw error;
+      const response = await fetch(`/api/staff/${id}`, { method: "DELETE" });
+      await readApiResponse(response);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["staff"] }),
   });

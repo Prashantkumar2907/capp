@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { readApiResponse } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/features/auth/auth-provider";
 import type { Branch } from "@/types/database";
@@ -40,13 +41,29 @@ export default function BranchesPage() {
 
   const save = useMutation({
     mutationFn: async () => {
+      const payload = {
+        name: form.name,
+        address: form.address || undefined,
+        city: form.city || undefined,
+        phone: form.phone || undefined,
+        upi_vpa: form.upi_vpa || undefined,
+        table_count: form.table_count,
+      };
       if (editing) {
-        const { error } = await supabase.from("branches").update(form).eq("id", editing.id);
-        if (error) throw error;
+        const response = await fetch(`/api/branches/${editing.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        await readApiResponse(response);
         return;
       }
-      const { error } = await supabase.from("branches").insert({ ...form, org_id: organization!.id });
-      if (error) throw error;
+      const response = await fetch("/api/branches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      await readApiResponse(response);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["branches"] });
@@ -60,8 +77,12 @@ export default function BranchesPage() {
 
   const toggle = useMutation({
     mutationFn: async (branch: Branch) => {
-      const { error } = await supabase.from("branches").update({ is_active: !branch.is_active }).eq("id", branch.id);
-      if (error) throw error;
+      const response = await fetch(`/api/branches/${branch.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: !branch.is_active }),
+      });
+      await readApiResponse(response);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["branches"] }),
   });
