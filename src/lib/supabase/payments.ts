@@ -151,6 +151,18 @@ export function validRazorpaySignature(body: string, signature: string, secret: 
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
+export function razorpayReplayIssue(event: Pick<RazorpayEvent, "created_at">, nowMs = Date.now()) {
+  if (!event.created_at) return "Webhook timestamp is missing";
+
+  const eventMs = event.created_at * 1000;
+  const maxAgeMs = 24 * 60 * 60 * 1000;
+  const futureSkewMs = 5 * 60 * 1000;
+
+  if (eventMs < nowMs - maxAgeMs) return "Webhook timestamp is outside the retry window";
+  if (eventMs > nowMs + futureSkewMs) return "Webhook timestamp is in the future";
+  return null;
+}
+
 function canSettlePayments(staff: Staff) {
   return ["owner", "admin", "manager", "cashier"].includes(staff.role);
 }

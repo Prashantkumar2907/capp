@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { apiError, apiOk } from "@/lib/api/responses";
-import { processRazorpayWebhook, razorpayEventId, validRazorpaySignature, type RazorpayEvent } from "@/lib/supabase/payments";
+import { processRazorpayWebhook, razorpayEventId, razorpayReplayIssue, validRazorpaySignature, type RazorpayEvent } from "@/lib/supabase/payments";
 
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
@@ -22,6 +22,12 @@ export async function POST(request: NextRequest) {
   } catch {
     return apiError("INVALID_JSON", "Webhook payload is not valid JSON", 400);
   }
+
+  const replayIssue = razorpayReplayIssue(event);
+  if (replayIssue) {
+    return apiError("WEBHOOK_REPLAY_REJECTED", replayIssue, 409);
+  }
+
   const result = await processRazorpayWebhook(event, rawBody, razorpayEventId(event, incomingEventId));
   if (!result.ok) {
     return apiError(result.code, result.message, result.status);
