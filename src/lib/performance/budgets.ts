@@ -166,7 +166,7 @@ export const PERFORMANCE_BUDGETS = [
     requiresErrorState: true,
     requiresServerPagination: false,
     cacheKey: "waiter-menu:{branchId}",
-    indexedHotPaths: ["idx_branch_dishes_branch", "idx_orders_branch_client_request", "idx_dishes_org_name"],
+    indexedHotPaths: ["idx_branch_dishes_branch", "idx_orders_branch_client_request", "idx_dishes_org_name", "idx_tables_branch_status"],
     trustBoundaries: ["server_order_totals", "server_menu_prices", "server_role_permissions", "server_tenant_scope"],
     viewports: CRITICAL_VIEWPORTS,
   },

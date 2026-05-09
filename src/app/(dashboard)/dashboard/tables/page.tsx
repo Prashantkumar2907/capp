@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Plus, QrCode, Table2, Users } from "lucide-react";
+import { AlertCircle, Copy, Plus, QrCode, Table2, Users } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
+import { readApiResponse } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
 import { clientEnv } from "@/lib/env";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -40,9 +41,16 @@ export default function TablesPage() {
 
   const add = useMutation({
     mutationFn: async () => {
-      const next = Math.max(0, ...(tables.data ?? []).map((table) => table.table_number)) + 1;
-      const { error } = await supabase.from("tables").insert({ branch_id: branch!.id, table_number: next, label: form.label || `Table ${next}`, capacity: form.capacity });
-      if (error) throw error;
+      const response = await fetch("/api/tables", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branch_id: branch?.id,
+          label: form.label || undefined,
+          capacity: form.capacity,
+        }),
+      });
+      await readApiResponse(response);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["tables"] });
@@ -55,10 +63,15 @@ export default function TablesPage() {
 
   const updateStatus = useMutation({
     mutationFn: async ({ table, status }: { table: RestaurantTable; status: RestaurantTable["status"] }) => {
-      const { error } = await supabase.from("tables").update({ status }).eq("id", table.id);
-      if (error) throw error;
+      const response = await fetch(`/api/tables/${table.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      await readApiResponse(response);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tables"] }),
+    onError: (error) => toast.error(error.message),
   });
 
   const counts = useMemo(() => {
@@ -77,6 +90,8 @@ export default function TablesPage() {
       <PageHeader title="Tables" description={`${counts.available} available | ${counts.occupied} occupied | ${counts.total} total`} actions={<Button onClick={() => setAddOpen(true)}><Plus className="h-4 w-4" />Add table</Button>} />
       {tables.isLoading ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{Array.from({ length: 8 }).map((_, index) => <Skeleton key={index} className="h-44" />)}</div>
+      ) : tables.error ? (
+        <EmptyState icon={AlertCircle} title="Tables could not be loaded" description="Refresh the page or check your branch access." />
       ) : tables.data?.length ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {tables.data.map((table) => (
@@ -93,7 +108,7 @@ export default function TablesPage() {
                   <Badge variant={table.status === "available" ? "success" : table.status === "occupied" ? "warning" : "secondary"}>{table.status}</Badge>
                 </div>
                 <div className="mt-4">
-                  <Select value={table.status} onChange={(event) => updateStatus.mutate({ table, status: event.target.value as RestaurantTable["status"] })}>
+                  <Select value={table.status} disabled={updateStatus.isPending} onChange={(event) => updateStatus.mutate({ table, status: event.target.value as RestaurantTable["status"] })}>
                     <option value="available">Available</option>
                     <option value="occupied">Occupied</option>
                     <option value="reserved">Reserved</option>

@@ -214,6 +214,7 @@ create index idx_dishes_category on dishes(category_id);
 create index idx_branch_dishes_branch on branch_dishes(branch_id);
 create index idx_branch_dishes_dish on branch_dishes(dish_id);
 create index idx_tables_branch on tables(branch_id);
+create index idx_tables_branch_status on tables(branch_id, status);
 create index idx_orders_branch_status on orders(branch_id, status);
 create index idx_orders_created on orders(created_at desc);
 create index idx_orders_branch_created on orders(branch_id, created_at desc);

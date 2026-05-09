@@ -13,5 +13,6 @@ test("schema includes composite branch/date indexes for analytics hot paths", ()
     "idx_orders_branch_table_active on orders(branch_id, table_number)",
     "idx_categories_org_sort on categories(org_id, sort_order)",
     "idx_dishes_org_name on dishes(org_id, name)",
+    "idx_tables_branch_status on tables(branch_id, status)",
   ].forEach((index) => assert.equal(schema.includes(index), true));
 });

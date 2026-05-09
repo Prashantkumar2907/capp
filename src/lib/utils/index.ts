@@ -69,6 +69,19 @@ export function slugify(value: string) {
     .replace(/(^-|-$)/g, "");
 }
 
+export function safeRedirectPath(value: string | null | undefined, fallback = "/dashboard") {
+  const candidate = value?.trim();
+  if (!candidate || !candidate.startsWith("/") || candidate.startsWith("//")) return fallback;
+
+  try {
+    const parsed = new URL(candidate, "https://capp.local");
+    if (parsed.origin !== "https://capp.local") return fallback;
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return fallback;
+  }
+}
+
 export function initials(value?: string | null) {
   if (!value) return "RX";
   return value

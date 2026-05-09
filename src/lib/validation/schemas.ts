@@ -75,6 +75,20 @@ export const tableSchema = z.object({
   capacity: z.number().int().min(1).max(40),
 });
 
+export const tableCreateSchema = tableSchema.extend({
+  branch_id: dbUuidSchema.optional(),
+});
+
+export const tableStatusUpdateSchema = z.object({
+  status: z.enum(["available", "occupied", "reserved", "inactive"]),
+});
+
+export const onboardingSchema = z.object({
+  organization: organizationSchema,
+  branch: branchSchema,
+  seedMenu: z.boolean(),
+});
+
 export const feedbackSchema = z.object({
   rating: z.number().int().min(1).max(5),
   comment: z.string().max(600).optional(),
@@ -129,6 +143,9 @@ export type StaffInput = z.infer<typeof staffSchema>;
 export type StaffUpdateInput = z.infer<typeof staffUpdateSchema>;
 export type DishInput = z.infer<typeof dishSchema>;
 export type DishUpdateInput = z.infer<typeof dishUpdateSchema>;
+export type TableCreateInput = z.infer<typeof tableCreateSchema>;
+export type TableStatusUpdateInput = z.infer<typeof tableStatusUpdateSchema>;
+export type OnboardingInput = z.infer<typeof onboardingSchema>;
 export type PaymentSettlementInput = z.infer<typeof paymentSettlementSchema>;
 export type OrderStatusUpdateInput = z.infer<typeof orderStatusUpdateSchema>;
 export type PublicMenuQueryInput = z.infer<typeof publicMenuQuerySchema>;

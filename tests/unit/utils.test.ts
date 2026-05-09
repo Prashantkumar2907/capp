@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ThemeMode, UserRole } from "../../src/lib/enums";
-import { calculateTotals, capSentence, formatCurrency, initials, isEmail, slugify, truncate, upiLink } from "../../src/lib/utils";
+import {
+  calculateTotals,
+  capSentence,
+  formatCurrency,
+  initials,
+  isEmail,
+  safeRedirectPath,
+  slugify,
+  truncate,
+  upiLink,
+} from "../../src/lib/utils";
 
 test("calculateTotals handles tax-inclusive restaurant pricing", () => {
   const total = calculateTotals(105, 5, true);
@@ -31,4 +41,12 @@ test("shared enums expose portable app contracts", () => {
   assert.equal(UserRole.Owner, "owner");
   assert.equal(UserRole.Kitchen, "kitchen");
   assert.equal(ThemeMode.System, "system");
+});
+
+test("safeRedirectPath only allows same-origin relative redirects", () => {
+  assert.equal(safeRedirectPath("/dashboard/orders?status=pending"), "/dashboard/orders?status=pending");
+  assert.equal(safeRedirectPath("https://evil.example/phish"), "/dashboard");
+  assert.equal(safeRedirectPath("//evil.example/phish"), "/dashboard");
+  assert.equal(safeRedirectPath("dashboard"), "/dashboard");
+  assert.equal(safeRedirectPath(null, "/sign-in"), "/sign-in");
 });

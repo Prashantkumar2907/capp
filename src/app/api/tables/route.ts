@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { apiError, apiOk, apiValidationError } from "@/lib/api/responses";
-import { completeOnboarding } from "@/lib/supabase/onboarding";
-import { onboardingSchema } from "@/lib/validation/schemas";
+import { createTable } from "@/lib/supabase/table-management";
+import { tableCreateSchema } from "@/lib/validation/schemas";
 
 export async function POST(request: NextRequest) {
   let payload: unknown;
@@ -11,11 +11,11 @@ export async function POST(request: NextRequest) {
     return apiError("INVALID_JSON", "Request body must be valid JSON", 400);
   }
 
-  const parsed = onboardingSchema.safeParse(payload);
+  const parsed = tableCreateSchema.safeParse(payload);
   if (!parsed.success) return apiValidationError(parsed.error);
 
-  const result = await completeOnboarding(parsed.data);
+  const result = await createTable(parsed.data);
   if (!result.ok) return apiError(result.code, result.message, result.status);
 
-  return apiOk(result.data);
+  return apiOk({ table: result.data.table });
 }
