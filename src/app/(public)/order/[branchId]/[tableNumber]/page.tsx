@@ -56,6 +56,7 @@ export default function PublicOrderPage() {
       return payload;
     },
     enabled: !!branchId && !!tableNumber,
+    retry: false,
   });
 
   const dishes = useMemo(() => {

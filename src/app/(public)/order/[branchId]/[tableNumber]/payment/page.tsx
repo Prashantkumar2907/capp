@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { CartPanel } from "@/components/features/cart/cart-panel";
+import { AppToaster } from "@/components/shared/app-toaster";
 import { readApiResponse } from "@/lib/api/client";
 import { calculateTotals } from "@/lib/utils";
 import { useHasMounted } from "@/hooks/use-has-mounted";
@@ -50,6 +51,7 @@ export default function PublicPaymentPage() {
       return payload;
     },
     enabled: !!branchId && !!tableNumber,
+    retry: false,
   });
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
@@ -173,6 +175,7 @@ export default function PublicPaymentPage() {
           {submitting ? "Sending..." : "Place order"}
         </Button>
       </div>
+      <AppToaster />
     </main>
   );
 }

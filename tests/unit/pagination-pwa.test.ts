@@ -35,7 +35,7 @@ test("pwa manifest, service worker, and install prompt are wired into the shell"
   ].forEach((path) => assert.equal(existsSync(path), true, `${path} should exist`));
 
   const layout = readFileSync("src/app/layout.tsx", "utf8");
-  const providers = readFileSync("src/components/shared/providers.tsx", "utf8");
+  const shell = readFileSync("src/components/layouts/dashboard-shell.tsx", "utf8");
   const prompt = readFileSync("src/components/shared/pwa-install-prompt.tsx", "utf8");
   const manifest = readFileSync("src/app/manifest.ts", "utf8");
   const worker = readFileSync("public/sw.js", "utf8");
@@ -43,7 +43,7 @@ test("pwa manifest, service worker, and install prompt are wired into the shell"
 
   assert.match(layout, /manifest: "\/manifest\.webmanifest"/);
   assert.match(layout, /appleWebApp/);
-  assert.match(providers, /<PwaInstallPrompt \/>/);
+  assert.match(shell, /<PwaInstallPrompt \/>/);
   assert.match(prompt, /beforeinstallprompt/);
   assert.match(prompt, /iphone\|ipad\|ipod/i);
   assert.match(prompt, /Add to Home Screen/);

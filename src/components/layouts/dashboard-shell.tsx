@@ -26,6 +26,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AppToaster } from "@/components/shared/app-toaster";
+import { PwaInstallPrompt } from "@/components/shared/pwa-install-prompt";
 import { cn, initials } from "@/lib/utils";
 import { roleLabels, type Role } from "@/lib/constants";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -212,6 +214,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </button>
         </nav>
       </section>
+      <PwaInstallPrompt />
+      <AppToaster />
     </div>
   );
 }

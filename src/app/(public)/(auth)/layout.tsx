@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { UtensilsCrossed } from "lucide-react";
+import { AppToaster } from "@/components/shared/app-toaster";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -21,6 +22,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <section className="flex min-h-screen items-center justify-center p-5">
         <div className="w-full max-w-md">{children}</div>
       </section>
+      <AppToaster />
     </main>
   );
 }

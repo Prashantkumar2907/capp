@@ -59,17 +59,23 @@ export function CartPanel({ items, subtotal, total, tax, submitLabel, loading, s
                     <p className="truncate text-sm font-medium">{item.dish_name}</p>
                     <p className="font-numbers mt-1 text-xs text-muted-foreground">{formatCurrency(item.unit_price)} each</p>
                   </div>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onRemove(item.dish_id)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive"
+                    aria-label={`Remove ${item.dish_name}`}
+                    onClick={() => onRemove(item.dish_id)}
+                  >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 rounded-full border bg-secondary p-1">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onDecrement(item.dish_id)}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Decrease ${item.dish_name}`} onClick={() => onDecrement(item.dish_id)}>
                       <Minus className="h-3.5 w-3.5" />
                     </Button>
                     <span className="font-numbers w-6 text-center text-xs font-semibold">{item.quantity}</span>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onIncrement(item.dish_id)}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Increase ${item.dish_name}`} onClick={() => onIncrement(item.dish_id)}>
                       <Plus className="h-3.5 w-3.5" />
                     </Button>
                   </div>

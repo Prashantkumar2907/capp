@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { ReceiptSkeleton } from "@/components/ui/loading-patterns";
 import { OrderStatusBadge } from "@/components/shared/status-badge";
+import { AppToaster } from "@/components/shared/app-toaster";
 import { readApiResponse } from "@/lib/api/client";
 import { formatCurrency, formatDateTime, upiLink } from "@/lib/utils";
 import type { Branch, Order, OrderItem, Payment } from "@/types/database";
@@ -37,6 +38,7 @@ export default function ReceiptPage() {
     },
     enabled: !!orderId,
     refetchInterval: 15000,
+    retry: false,
   });
 
   const feedback = useMutation({
@@ -171,6 +173,7 @@ export default function ReceiptPage() {
           </div>
         ) : null}
       </div>
+      <AppToaster />
     </main>
   );
 }

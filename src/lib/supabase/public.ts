@@ -11,14 +11,27 @@ type BranchWithOrganization = Branch & {
 type BranchDishRow = {
   custom_price: number | null;
   is_available: boolean;
-  dishes: (Dish & { categories: Pick<Category, "name"> | null }) | null;
+  dishes: (PublicMenuDish & { categories: Pick<Category, "name"> | null }) | null;
 };
 
+export type PublicMenuBranch = Pick<Branch, "id" | "org_id" | "name" | "address" | "city"> & {
+  organizations: { name: string; default_tax_percent: number; tax_inclusive: boolean } | null;
+};
+
+export type PublicMenuTable = Pick<RestaurantTable, "id" | "branch_id" | "table_number" | "label" | "capacity" | "status">;
+
+export type PublicMenuCategory = Pick<Category, "id" | "org_id" | "name" | "sort_order" | "is_active">;
+
+export type PublicMenuDish = Pick<
+  Dish,
+  "id" | "category_id" | "name" | "description" | "price" | "image_url" | "is_veg" | "is_active" | "prep_time_mins"
+>;
+
 export type PublicMenuPayload = {
-  branch: BranchWithOrganization;
-  table: RestaurantTable | null;
-  categories: Category[];
-  dishes: Array<Dish & { categories: Pick<Category, "name"> | null }>;
+  branch: PublicMenuBranch;
+  table: PublicMenuTable | null;
+  categories: PublicMenuCategory[];
+  dishes: Array<PublicMenuDish & { categories: Pick<Category, "name"> | null }>;
 };
 
 export type PublicReceiptOrder = Order & {
@@ -31,7 +44,7 @@ export async function getPublicMenu(input: PublicMenuQueryInput): Promise<Public
   const admin = createAdminSupabase();
   const { data: branch, error: branchError } = await admin
     .from("branches")
-    .select("*, organizations(name, default_tax_percent, tax_inclusive)")
+    .select("id, org_id, name, address, city, organizations(name, default_tax_percent, tax_inclusive)")
     .eq("id", input.branchId)
     .eq("is_active", true)
     .single();
@@ -44,16 +57,21 @@ export async function getPublicMenu(input: PublicMenuQueryInput): Promise<Public
     input.tableNumber
       ? admin
           .from("tables")
-          .select("*")
+          .select("id, branch_id, table_number, label, capacity, status")
           .eq("branch_id", input.branchId)
           .eq("table_number", input.tableNumber)
           .eq("is_active", true)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
-    admin.from("categories").select("*").eq("org_id", (branch as Branch).org_id).eq("is_active", true).order("sort_order"),
+    admin
+      .from("categories")
+      .select("id, org_id, name, sort_order, is_active")
+      .eq("org_id", (branch as Pick<Branch, "org_id">).org_id)
+      .eq("is_active", true)
+      .order("sort_order"),
     admin
       .from("branch_dishes")
-      .select("custom_price, is_available, dishes(*, categories(name))")
+      .select("custom_price, is_available, dishes(id, category_id, name, description, price, image_url, is_veg, is_active, prep_time_mins, categories(name))")
       .eq("branch_id", input.branchId)
       .eq("is_available", true)
       .order("created_at", { ascending: true }),
@@ -81,8 +99,8 @@ export async function getPublicMenu(input: PublicMenuQueryInput): Promise<Public
   return {
     ok: true,
     data: {
-      branch: branch as BranchWithOrganization,
-      table: table as RestaurantTable | null,
+      branch: branch as PublicMenuBranch,
+      table: table as PublicMenuTable | null,
       categories: categories ?? [],
       dishes,
     },
