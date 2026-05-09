@@ -13,6 +13,7 @@ async function main() {
     await client.connect();
 
     const expectedTables = [
+      "platform_admins",
       "organizations",
       "branches",
       "staff",
@@ -24,6 +25,7 @@ async function main() {
       "order_items",
       "payments",
       "subscriptions",
+      "subscription_grants",
       "activity_logs",
       "feedback",
     ];

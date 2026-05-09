@@ -2,6 +2,8 @@ import { z } from "zod";
 import { operationalOrderStatuses, roles } from "@/lib/constants";
 
 export const dbUuidSchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "Invalid UUID");
+export const subscriptionPlanSchema = z.enum(["starter", "growth", "pro", "enterprise"]);
+export const subscriptionStatusSchema = z.enum(["trial", "active", "past_due", "cancelled", "expired"]);
 
 export const signInSchema = z.object({
   email: z.email(),
@@ -89,6 +91,26 @@ export const onboardingSchema = z.object({
   seedMenu: z.boolean(),
 });
 
+export const platformSubscriptionGrantSchema = z.object({
+  orgId: dbUuidSchema,
+  plan: subscriptionPlanSchema,
+  status: subscriptionStatusSchema.default("active"),
+  durationDays: z.number().int().min(1).max(1095),
+  extendFromCurrentPeriod: z.boolean().default(true),
+  paymentReference: z.string().trim().max(120).optional(),
+  notes: z.string().trim().max(500).optional(),
+});
+
+export const platformClientOnboardingSchema = z.object({
+  ownerEmail: z.email(),
+  organization: organizationSchema,
+  branch: branchSchema,
+  seedMenu: z.boolean().default(true),
+  subscription: platformSubscriptionGrantSchema.omit({ orgId: true }).extend({
+    status: subscriptionStatusSchema.default("active"),
+  }),
+});
+
 export const feedbackSchema = z.object({
   rating: z.number().int().min(1).max(5),
   comment: z.string().max(600).optional(),
@@ -146,6 +168,8 @@ export type DishUpdateInput = z.infer<typeof dishUpdateSchema>;
 export type TableCreateInput = z.infer<typeof tableCreateSchema>;
 export type TableStatusUpdateInput = z.infer<typeof tableStatusUpdateSchema>;
 export type OnboardingInput = z.infer<typeof onboardingSchema>;
+export type PlatformSubscriptionGrantInput = z.infer<typeof platformSubscriptionGrantSchema>;
+export type PlatformClientOnboardingInput = z.infer<typeof platformClientOnboardingSchema>;
 export type PaymentSettlementInput = z.infer<typeof paymentSettlementSchema>;
 export type OrderStatusUpdateInput = z.infer<typeof orderStatusUpdateSchema>;
 export type PublicMenuQueryInput = z.infer<typeof publicMenuQuerySchema>;

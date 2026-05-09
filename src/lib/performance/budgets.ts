@@ -9,12 +9,14 @@ export type PerformancePersona =
   | "manager"
   | "waiter"
   | "kitchen"
-  | "cashier";
+  | "cashier"
+  | "platform_admin";
 
 export type TrustBoundary =
   | "server_menu_prices"
   | "server_order_totals"
   | "server_payment_status"
+  | "server_platform_admin"
   | "server_role_permissions"
   | "server_tenant_scope"
   | "webhook_signature";
@@ -28,7 +30,8 @@ export type CriticalRouteId =
   | "waiter-pos"
   | "cashier-payments"
   | "staff-management"
-  | "menu-management";
+  | "menu-management"
+  | "platform-admin";
 
 export type PerformanceBudget = {
   readonly id: CriticalRouteId;
@@ -225,6 +228,31 @@ export const PERFORMANCE_BUDGETS = [
     cacheKey: "menu-management:{orgId}:{branchId}:{page}",
     indexedHotPaths: ["idx_dishes_org", "idx_dishes_org_name", "idx_dishes_category", "idx_branch_dishes_branch", "idx_categories_org_sort"],
     trustBoundaries: ["server_menu_prices", "server_role_permissions", "server_tenant_scope"],
+    viewports: CRITICAL_VIEWPORTS,
+  },
+  {
+    id: "platform-admin",
+    routePattern: "/admin",
+    workflow: "App creator reviews customers, pending users, subscription expiries, and manual grants",
+    personas: ["platform_admin"],
+    maxInitialJsKb: 240,
+    maxApiP95Ms: 900,
+    maxImageKb: 60,
+    maxDuplicateFetches: 0,
+    maxMutationRequestsPerIntent: 1,
+    requiresSkeleton: true,
+    requiresEmptyState: true,
+    requiresErrorState: true,
+    requiresServerPagination: false,
+    cacheKey: "platform-overview:{adminId}",
+    indexedHotPaths: [
+      "idx_platform_admins_email",
+      "idx_platform_admins_user",
+      "idx_organizations_plan_status",
+      "idx_subscriptions_org_period",
+      "idx_subscription_grants_org_created",
+    ],
+    trustBoundaries: ["server_platform_admin", "server_tenant_scope"],
     viewports: CRITICAL_VIEWPORTS,
   },
 ] as const satisfies readonly PerformanceBudget[];

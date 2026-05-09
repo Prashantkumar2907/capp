@@ -19,3 +19,10 @@ export function requireServerEnv() {
   if (!serviceRoleKey) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
   return { serviceRoleKey };
 }
+
+export function platformAdminEmails() {
+  return (process.env.PLATFORM_ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}

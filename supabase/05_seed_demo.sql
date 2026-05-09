@@ -1,3 +1,8 @@
+insert into platform_admins (id, email, full_name, is_active)
+values
+('30000000-0000-0000-0000-000000000001', 'admin@example.com', 'CAPP Platform Admin', true)
+on conflict (email) do update set full_name = excluded.full_name, is_active = excluded.is_active;
+
 insert into organizations (id, name, slug, logo_url, accent_color, restaurant_type, default_tax_percent, tax_inclusive, plan, subscription_status, settings)
 values
 ('a0000000-0000-0000-0000-000000000011', 'Lotus Tea Room', 'lotus-tea-room', 'https://placehold.co/256x256/png?text=Lotus%20Tea', '#2f8f6b', 'tea_shop', 5, true, 'starter', 'trial', '{"currency":"INR","timezone":"Asia/Kolkata","service_charge_percent":0,"rounding":"nearest_rupee","tips_enabled":false,"business_hours":{"mon_fri":"08:00-20:00","sat_sun":"09:00-21:00"},"receipt_prefix":"LTR","plan_limits":{"branches":1,"staff":6}}'::jsonb),
@@ -159,6 +164,14 @@ values
 ('60000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', 'growth', 'active', 'sub_demo_masala_growth', now() - interval '12 days', now() + interval '18 days'),
 ('60000000-0000-0000-0000-000000000033', 'a0000000-0000-0000-0000-000000000033', 'enterprise', 'active', 'sub_demo_harbour_enterprise', now() - interval '20 days', now() + interval '10 days'),
 ('60000000-0000-0000-0000-000000000044', 'a0000000-0000-0000-0000-000000000044', 'pro', 'active', 'sub_demo_nightowl_pro', now() - interval '5 days', now() + interval '25 days')
+on conflict (id) do nothing;
+
+insert into subscription_grants (id, org_id, subscription_id, platform_admin_id, plan, status, period_start, period_end, days_granted, payment_reference, notes)
+values
+('31000000-0000-0000-0000-000000000011', 'a0000000-0000-0000-0000-000000000011', '60000000-0000-0000-0000-000000000011', '30000000-0000-0000-0000-000000000001', 'starter', 'trial', now() - interval '3 days', now() + interval '11 days', 14, 'demo-trial-lotus', 'Seed trial grant'),
+('31000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', '60000000-0000-0000-0000-000000000099', '30000000-0000-0000-0000-000000000001', 'growth', 'active', now() - interval '12 days', now() + interval '18 days', 30, 'demo-paid-masala', 'Seed active subscription'),
+('31000000-0000-0000-0000-000000000033', 'a0000000-0000-0000-0000-000000000033', '60000000-0000-0000-0000-000000000033', '30000000-0000-0000-0000-000000000001', 'enterprise', 'active', now() - interval '20 days', now() + interval '10 days', 30, 'demo-paid-harbour', 'Seed enterprise subscription'),
+('31000000-0000-0000-0000-000000000044', 'a0000000-0000-0000-0000-000000000044', '60000000-0000-0000-0000-000000000044', '30000000-0000-0000-0000-000000000001', 'pro', 'active', now() - interval '5 days', now() + interval '25 days', 30, 'demo-paid-nightowl', 'Seed pro subscription')
 on conflict (id) do nothing;
 
 insert into feedback (id, order_id, branch_id, rating, comment, created_at)

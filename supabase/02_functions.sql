@@ -9,6 +9,7 @@ end;
 $$;
 
 create trigger organizations_updated_at before update on organizations for each row execute function set_updated_at();
+create trigger platform_admins_updated_at before update on platform_admins for each row execute function set_updated_at();
 create trigger branches_updated_at before update on branches for each row execute function set_updated_at();
 create trigger staff_updated_at before update on staff for each row execute function set_updated_at();
 create trigger dishes_updated_at before update on dishes for each row execute function set_updated_at();

@@ -37,3 +37,11 @@ test("dish image writes are limited to menu-management roles", () => {
   assert.match(storage, /dish_images_update[\s\S]*app_user_role\(\) in \('owner','admin','manager'\)/);
   assert.match(storage, /dish_images_delete[\s\S]*app_user_role\(\) in \('owner','admin','manager'\)/);
 });
+
+test("platform admin tables do not expose broad client-side policies", () => {
+  assert.match(rls, /alter table platform_admins enable row level security/);
+  assert.match(rls, /alter table subscription_grants enable row level security/);
+  assert.match(rls, /platform_admins_select_self/);
+  assert.doesNotMatch(rls, /on subscription_grants[\s\S]{0,120}using \(true\)/);
+  assert.doesNotMatch(rls, /on subscription_grants[\s\S]{0,120}with check \(true\)/);
+});

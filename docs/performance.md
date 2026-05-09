@@ -21,6 +21,7 @@ The current critical route IDs are:
 | `cashier-payments` | `/dashboard/payments` | owner, admin, manager, cashier | Server-trusted settlement state, webhook signature boundary, paginated lists |
 | `staff-management` | `/dashboard/staff` | owner, admin, manager | Tenant-scoped staff management with paginated lists |
 | `menu-management` | `/dashboard/menu` | owner, admin, manager | Server-validated price, branch, and category ownership with resilient media |
+| `platform-admin` | `/admin` | platform admin | Platform-scoped customer portfolio, pending users, subscription grants, and audit-backed manual extensions |
 
 ## Key Pages
 - Public QR menu: first useful menu content within 2.5 seconds on a typical 4G device after the API responds, no horizontal overflow at 360 px, and no more than one menu request per branch/table cache key.
@@ -28,11 +29,13 @@ The current critical route IDs are:
 - Dashboard overview: summary query window defaults to 7 days and selects only chart/stat columns; cards and recent order list render without layout shift.
 - Analytics: selectable 7, 14, and 30 day windows use branch/date indexes and chart-ready summary data rather than client-side full-row aggregation.
 - Kitchen display: realtime subscriptions must be cleaned up on branch changes and status PATCH responses should update local state without a duplicate manual refetch.
+- Platform admin: portfolio data uses service-role APIs behind platform-admin authorization, subscription grants write audit rows, and customer onboarding is one mutation per submit intent.
 
 ## Data Access
 - Branch/date hot paths need composite indexes for orders, order items, payments, and feedback.
 - Table release checks need the active table index `idx_orders_branch_table_active` because payment settlement and cancellations verify whether another active order still occupies the table.
 - Menu management and public menu reads should use category sort and dish-name indexes as menus grow.
+- Platform admin reads should use platform admin email/user, organization plan/status, subscription period, and grant-history indexes.
 - Large operational lists should be paginated or range-limited before adding new filters.
 - Client components should reuse query-backed state and stable query keys instead of issuing duplicate API calls for the same branch workflow.
 - Public clients must never submit trusted totals, item prices, payment status, roles, or permission decisions.
@@ -45,4 +48,4 @@ The current critical route IDs are:
 
 ## Test Gate
 
-`tests/unit/performance-budgets.test.ts` verifies that all critical route budgets are present, all six staff roles plus the public customer persona are covered, route budgets require skeleton/empty/error states, duplicate fetch allowance remains zero, ordering and payment trust boundaries stay server-side, and every budgeted hot path has a matching schema index.
+`tests/unit/performance-budgets.test.ts` verifies that all critical route budgets are present, all six staff roles plus the public customer and platform admin personas are covered, route budgets require skeleton/empty/error states, duplicate fetch allowance remains zero, ordering/payment/platform-admin trust boundaries stay server-side, and every budgeted hot path has a matching schema index.

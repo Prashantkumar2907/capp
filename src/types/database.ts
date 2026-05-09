@@ -3,6 +3,12 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export interface Database {
   public: {
     Tables: {
+      platform_admins: {
+        Row: PlatformAdmin;
+        Insert: Partial<PlatformAdmin> & Pick<PlatformAdmin, "email">;
+        Update: Partial<PlatformAdmin>;
+        Relationships: [];
+      };
       organizations: {
         Row: Organization;
         Insert: Partial<Organization> & Pick<Organization, "name" | "slug">;
@@ -102,6 +108,16 @@ export interface Database {
           { foreignKeyName: "subscriptions_org_id_fkey"; columns: ["org_id"]; referencedRelation: "organizations"; referencedColumns: ["id"] },
         ];
       };
+      subscription_grants: {
+        Row: SubscriptionGrant;
+        Insert: Partial<SubscriptionGrant> & Pick<SubscriptionGrant, "org_id" | "plan" | "status" | "period_start" | "period_end" | "days_granted">;
+        Update: never;
+        Relationships: [
+          { foreignKeyName: "subscription_grants_org_id_fkey"; columns: ["org_id"]; referencedRelation: "organizations"; referencedColumns: ["id"] },
+          { foreignKeyName: "subscription_grants_subscription_id_fkey"; columns: ["subscription_id"]; referencedRelation: "subscriptions"; referencedColumns: ["id"] },
+          { foreignKeyName: "subscription_grants_platform_admin_id_fkey"; columns: ["platform_admin_id"]; referencedRelation: "platform_admins"; referencedColumns: ["id"] },
+        ];
+      };
       activity_logs: {
         Row: ActivityLog;
         Insert: Partial<ActivityLog> & Pick<ActivityLog, "org_id" | "action">;
@@ -132,6 +148,16 @@ export interface Database {
     CompositeTypes: Record<string, never>;
   };
 }
+
+export type PlatformAdmin = {
+  id: string;
+  user_id: string | null;
+  email: string;
+  full_name: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
 
 export type Organization = {
   id: string;
@@ -296,6 +322,21 @@ export type Subscription = {
   current_period_end: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type SubscriptionGrant = {
+  id: string;
+  org_id: string;
+  subscription_id: string | null;
+  platform_admin_id: string | null;
+  plan: "starter" | "growth" | "pro" | "enterprise";
+  status: "trial" | "active" | "past_due" | "cancelled" | "expired";
+  period_start: string;
+  period_end: string;
+  days_granted: number;
+  payment_reference: string | null;
+  notes: string | null;
+  created_at: string;
 };
 
 export type ActivityLog = {

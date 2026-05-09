@@ -23,6 +23,12 @@ test("demo seed covers every staff role with fake local emails", () => {
   assert.match(seedSql, /demo\.capp\.local/);
 });
 
+test("demo seed bootstraps a platform admin and subscription grant history", () => {
+  assert.match(seedSql, /insert into platform_admins/);
+  assert.match(seedSql, /admin@example\.com/);
+  assert.match(seedSql, /insert into subscription_grants/);
+});
+
 test("demo seed keeps UUIDs database-valid and order statuses centralized", () => {
   const uuidLikeValues = seedSql.match(/'[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}'/gi) ?? [];
   const invalidUuidValues = uuidLikeValues.filter((value) => !/^'[0-9a-f-]+'$/i.test(value));

@@ -1,3 +1,4 @@
+alter table platform_admins enable row level security;
 alter table organizations enable row level security;
 alter table branches enable row level security;
 alter table staff enable row level security;
@@ -10,8 +11,11 @@ alter table order_items enable row level security;
 alter table payments enable row level security;
 alter table webhook_events enable row level security;
 alter table subscriptions enable row level security;
+alter table subscription_grants enable row level security;
 alter table activity_logs enable row level security;
 alter table feedback enable row level security;
+
+create policy platform_admins_select_self on platform_admins for select using (is_active = true and (user_id = auth.uid() or lower(email) = lower(auth.jwt() ->> 'email')));
 
 create policy organizations_select on organizations for select using (id = app_user_org_id());
 create policy organizations_insert on organizations for insert with check (auth.uid() is not null);

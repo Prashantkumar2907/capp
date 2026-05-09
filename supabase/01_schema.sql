@@ -1,5 +1,6 @@
 drop table if exists feedback cascade;
 drop table if exists activity_logs cascade;
+drop table if exists subscription_grants cascade;
 drop table if exists subscriptions cascade;
 drop table if exists webhook_events cascade;
 drop table if exists payments cascade;
@@ -11,7 +12,18 @@ drop table if exists dishes cascade;
 drop table if exists categories cascade;
 drop table if exists staff cascade;
 drop table if exists branches cascade;
+drop table if exists platform_admins cascade;
 drop table if exists organizations cascade;
+
+create table platform_admins (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid unique references auth.users(id) on delete set null,
+  email text not null unique,
+  full_name text,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
 
 create table organizations (
   id uuid primary key default uuid_generate_v4(),
@@ -181,6 +193,21 @@ create table subscriptions (
   updated_at timestamptz not null default now()
 );
 
+create table subscription_grants (
+  id uuid primary key default uuid_generate_v4(),
+  org_id uuid not null references organizations(id) on delete cascade,
+  subscription_id uuid references subscriptions(id) on delete set null,
+  platform_admin_id uuid references platform_admins(id) on delete set null,
+  plan text not null check (plan in ('starter','growth','pro','enterprise')),
+  status text not null check (status in ('trial','active','past_due','cancelled','expired')),
+  period_start timestamptz not null,
+  period_end timestamptz not null,
+  days_granted int not null check (days_granted between 1 and 1095),
+  payment_reference text,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
 create table activity_logs (
   id uuid primary key default uuid_generate_v4(),
   org_id uuid references organizations(id) on delete cascade,
@@ -203,6 +230,9 @@ create table feedback (
 );
 
 create index idx_branches_org on branches(org_id);
+create index idx_platform_admins_email on platform_admins(lower(email));
+create index idx_platform_admins_user on platform_admins(user_id) where user_id is not null;
+create index idx_organizations_plan_status on organizations(plan, subscription_status);
 create index idx_staff_org on staff(org_id);
 create index idx_staff_branch on staff(branch_id);
 create index idx_staff_user on staff(user_id);
@@ -228,5 +258,8 @@ create index idx_payments_order on payments(order_id);
 create unique index idx_payments_transaction on payments(transaction_id) where transaction_id is not null;
 create index idx_payments_branch_created on payments(branch_id, created_at desc);
 create index idx_webhook_events_provider_event on webhook_events(provider, event_id);
+create index idx_subscriptions_org_period on subscriptions(org_id, current_period_end desc);
+create index idx_subscription_grants_org_created on subscription_grants(org_id, created_at desc);
+create index idx_subscription_grants_period_end on subscription_grants(period_end desc);
 create index idx_feedback_branch on feedback(branch_id);
 create index idx_feedback_branch_created on feedback(branch_id, created_at desc);

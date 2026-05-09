@@ -23,10 +23,11 @@ test("critical performance budgets cover customer and staff workflows", () => {
       "cashier-payments",
       "staff-management",
       "menu-management",
+      "platform-admin",
     ]
   );
 
-  const personas: PerformancePersona[] = ["public_customer", "owner", "admin", "manager", "waiter", "kitchen", "cashier"];
+  const personas: PerformancePersona[] = ["public_customer", "owner", "admin", "manager", "waiter", "kitchen", "cashier", "platform_admin"];
   personas.forEach((persona) => {
     assert.ok(performanceBudgetsForPersona(persona).length > 0, `${persona} should have a performance budget`);
   });
