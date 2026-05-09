@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CreditCard, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { readApiResponse } from "@/lib/api/client";
 import { calculateTotals } from "@/lib/utils";
 import { useHasMounted } from "@/hooks/use-has-mounted";
 import { useCartStore } from "@/stores/cart-store";
+import type { RestaurantTable } from "@/types/database";
 
 interface PublicMenuMeta {
   branch: {
@@ -25,11 +26,13 @@ interface PublicMenuMeta {
     name: string;
     organizations: { name: string; default_tax_percent: number; tax_inclusive: boolean } | null;
   };
+  table: Pick<RestaurantTable, "id" | "branch_id" | "table_number" | "label" | "capacity" | "status"> | null;
 }
 
 export default function PublicPaymentPage() {
   const params = useParams<{ branchId: string; tableNumber: string }>();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const branchId = safeParam(params.branchId);
   const tableNumber = Number(safeParam(params.tableNumber));
   const cart = useCartStore();
@@ -42,15 +45,20 @@ export default function PublicPaymentPage() {
   const cartReady = hasMounted && cart.hasHydrated;
   const cartItems = cartReady ? cart.items : [];
 
+  const menuQueryKey = ["public-menu", branchId, tableNumber] as const;
+
   const meta = useQuery({
     queryKey: ["public-menu-meta", branchId, tableNumber],
     queryFn: async () => {
-      const response = await fetch(`/api/public/menu?branchId=${branchId}&tableNumber=${tableNumber}`);
-      const payload = (await response.json()) as PublicMenuMeta & { error?: string };
-      if (!response.ok) throw new Error(payload.error ?? "Unable to load branch");
-      return payload;
+      const response = await fetch(`/api/public/menu/meta?branchId=${branchId}&tableNumber=${tableNumber}`);
+      return readApiResponse<PublicMenuMeta>(response);
     },
     enabled: !!branchId && !!tableNumber,
+    initialData: () => {
+      const cachedMenu = queryClient.getQueryData<PublicMenuMeta>(menuQueryKey);
+      return cachedMenu ? { branch: cachedMenu.branch, table: cachedMenu.table } : undefined;
+    },
+    initialDataUpdatedAt: () => queryClient.getQueryState(menuQueryKey)?.dataUpdatedAt,
     retry: false,
   });
 
@@ -128,15 +136,15 @@ export default function PublicPaymentPage() {
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
-                <Field label="Name optional">
-                  <Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Your name" />
+                <Field id="customer-name" label="Name optional">
+                  <Input id="customer-name" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Your name" />
                 </Field>
-                <Field label="Phone optional">
-                  <Input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} placeholder="For bill updates" />
+                <Field id="customer-phone" label="Phone optional">
+                  <Input id="customer-phone" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} placeholder="For bill updates" />
                 </Field>
               </div>
-              <Field label="Order note">
-                <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Anything the kitchen should know" />
+              <Field id="order-note" label="Order note">
+                <Textarea id="order-note" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Anything the kitchen should know" />
               </Field>
               {!cartReady ? (
                 <div className="space-y-3 rounded-2xl border border-dashed p-4" aria-label="Loading saved cart">
@@ -156,6 +164,7 @@ export default function PublicPaymentPage() {
           tax={totals.tax}
           total={totals.total}
           submitLabel="Place order"
+          submitClassName="hidden xl:inline-flex"
           loading={!cartReady}
           submitting={submitting}
           disabled={meta.isLoading || Boolean(meta.error)}
@@ -180,10 +189,10 @@ export default function PublicPaymentPage() {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label htmlFor={id}>{label}</Label>
       {children}
     </div>
   );

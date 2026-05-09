@@ -49,22 +49,22 @@
   --card-foreground: #17231f;
   --popover: #ffffff;
   --popover-foreground: #17231f;
-  --primary: #128c7e;
+  --primary: #0b756b;
   --primary-foreground: #ffffff;
   --secondary: #eef1e8;
   --secondary-foreground: #26342f;
   --muted: #ecefe6;
-  --muted-foreground: #66736d;
+  --muted-foreground: #56645d;
   --accent: #fff0cf;
   --accent-foreground: #5f3904;
   --destructive: #df3f3f;
   --destructive-foreground: #ffffff;
-  --success: #0f9f6e;
+  --success: #087a55;
   --warning: #d99012;
   --info: #3275c9;
   --border: #d9e0d5;
   --input: #cfd8ca;
-  --ring: #128c7e;
+  --ring: #0b756b;
   --sidebar: #ffffff;
   --sidebar-foreground: #17231f;
 }

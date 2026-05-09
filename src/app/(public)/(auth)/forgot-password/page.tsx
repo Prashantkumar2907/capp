@@ -33,8 +33,8 @@ export default function ForgotPasswordPage() {
         <p className="mt-1 text-sm text-muted-foreground">Send a secure reset link to your email.</p>
         <form onSubmit={submit} className="mt-6 space-y-4">
           <div className="space-y-1.5">
-            <Label>Email</Label>
-            <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+            <Label htmlFor="reset-email">Email</Label>
+            <Input id="reset-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
           </div>
           <Button className="w-full" disabled={loading || !email}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

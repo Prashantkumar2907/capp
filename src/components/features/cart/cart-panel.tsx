@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import type { CartItem } from "@/stores/cart-store";
 
 interface CartPanelProps {
@@ -17,6 +17,7 @@ interface CartPanelProps {
   loading?: boolean;
   submitting?: boolean;
   disabled?: boolean;
+  submitClassName?: string;
   onIncrement: (dishId: string) => void;
   onDecrement: (dishId: string) => void;
   onRemove: (dishId: string) => void;
@@ -24,7 +25,22 @@ interface CartPanelProps {
   onSubmit: () => void;
 }
 
-export function CartPanel({ items, subtotal, total, tax, submitLabel, loading, submitting, disabled, onIncrement, onDecrement, onRemove, onNotes, onSubmit }: CartPanelProps) {
+export function CartPanel({
+  items,
+  subtotal,
+  total,
+  tax,
+  submitLabel,
+  loading,
+  submitting,
+  disabled,
+  submitClassName,
+  onIncrement,
+  onDecrement,
+  onRemove,
+  onNotes,
+  onSubmit,
+}: CartPanelProps) {
   return (
     <Card className="sticky top-4">
       <CardContent className="space-y-4 p-4">
@@ -81,7 +97,15 @@ export function CartPanel({ items, subtotal, total, tax, submitLabel, loading, s
                   </div>
                   <p className="font-numbers text-sm font-semibold">{formatCurrency(item.unit_price * item.quantity)}</p>
                 </div>
-                {onNotes ? <Textarea rows={2} value={item.notes ?? ""} placeholder="Item note" onChange={(event) => onNotes(item.dish_id, event.target.value)} /> : null}
+                {onNotes ? (
+                  <Textarea
+                    rows={2}
+                    value={item.notes ?? ""}
+                    placeholder="Item note"
+                    aria-label={`Note for ${item.dish_name}`}
+                    onChange={(event) => onNotes(item.dish_id, event.target.value)}
+                  />
+                ) : null}
               </div>
             ))}
           </div>
@@ -114,7 +138,7 @@ export function CartPanel({ items, subtotal, total, tax, submitLabel, loading, s
             </div>
           ) : null}
         </div>
-        <Button className="w-full" disabled={loading || disabled || !items.length || submitting} onClick={onSubmit}>
+        <Button className={cn("w-full", submitClassName)} disabled={loading || disabled || !items.length || submitting} onClick={onSubmit}>
           {loading ? "Loading order..." : submitting ? "Working..." : submitLabel}
         </Button>
       </CardContent>

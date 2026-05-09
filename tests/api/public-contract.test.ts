@@ -28,6 +28,19 @@ test("public receipt rejects malformed order ids before database work", async ()
   assert.match(body.error ?? "", /orderId/i);
 });
 
+test("public menu metadata rejects malformed branch ids before database work", async () => {
+  const { GET } = await import("../../src/app/api/public/menu/meta/route");
+  const request = { nextUrl: new URL("http://localhost/api/public/menu/meta?branchId=bad&tableNumber=1") } as NextRequest;
+
+  const response = await GET(request);
+  const body = (await response.json()) as { ok: boolean; code?: string; error?: string };
+
+  assert.equal(response.status, 400);
+  assert.equal(body.ok, false);
+  assert.equal(body.code, "VALIDATION_ERROR");
+  assert.match(body.error ?? "", /branchId/i);
+});
+
 test("public feedback rejects invalid input before database work", async () => {
   const { POST } = await import("../../src/app/api/public/feedback/route");
   const request = new Request("http://localhost/api/public/feedback", {

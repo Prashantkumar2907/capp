@@ -198,6 +198,10 @@ test("public QR payment sends one idempotent order request on duplicate clicks",
 
   await page.goto(`/order/${branchId}/1/payment`);
   await expect(page.getByRole("heading", { name: /review and send order/i })).toBeVisible();
+  await expect(page.getByLabel("Name optional")).toBeVisible();
+  await expect(page.getByLabel("Phone optional")).toBeVisible();
+  await expect(page.getByLabel("Order note")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^place order$/i })).toHaveCount(1);
 
   await page.getByRole("button", { name: /^place order$/i }).last().dblclick();
   await expect(page).toHaveURL(new RegExp(`/receipt/${orderId}$`), { timeout: 15000 });
@@ -208,4 +212,91 @@ test("public QR payment sends one idempotent order request on duplicate clicks",
   expect(String(submitted?.clientRequestId)).toMatch(/^[a-z0-9:_-]{12,96}$/i);
   expect(JSON.stringify(submitted)).not.toContain("price_at_order");
   expect(JSON.stringify(submitted)).not.toContain("unit_price");
+});
+
+test("public QR payment reuses loaded menu metadata after menu navigation", async ({ page }) => {
+  let menuCalls = 0;
+  let metaCalls = 0;
+
+  await page.route(/\/api\/public\/menu\/meta(?:\?|$)/, async (route) => {
+    metaCalls += 1;
+    await route.fulfill({ json: { branch: menuFixture.branch, table: menuFixture.table } });
+  });
+  await page.route(/\/api\/public\/menu(?:\?|$)/, async (route) => {
+    menuCalls += 1;
+    await route.fulfill({ json: menuFixture });
+  });
+
+  await page.goto(`/order/${branchId}/1`);
+  await expect(page.getByText("Millet Masala Dosa")).toBeVisible();
+  await page.getByRole("button", { name: /add millet masala dosa|add/i }).first().click();
+
+  const desktopReview = page.getByRole("button", { name: /^review order$/i });
+  const mobileReview = page.getByRole("link", { name: /review 1 items/i });
+  if (await desktopReview.isVisible()) {
+    await expect(desktopReview).toBeEnabled();
+    await desktopReview.click();
+  } else {
+    await expect(mobileReview).toBeVisible();
+    await mobileReview.click();
+  }
+
+  await expect(page).toHaveURL(new RegExp(`/order/${branchId}/1/payment$`));
+  await expect(page.getByRole("heading", { name: /review and send order/i })).toBeVisible();
+
+  expect(menuCalls).toBe(1);
+  expect(metaCalls).toBe(0);
+});
+
+test("direct public QR payment uses lightweight metadata and one mobile submit action", async ({ page }) => {
+  let menuCalls = 0;
+  let metaCalls = 0;
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(
+    ({ branchId: seededBranchId }) => {
+      window.localStorage.setItem(
+        "capp-cart-v2",
+        JSON.stringify({
+          state: {
+            branchId: seededBranchId,
+            tableNumber: 1,
+            submissionKey: null,
+            items: [
+              {
+                dish_id: "d0000000-0000-0000-0000-000000000001",
+                dish_name: "Millet Masala Dosa",
+                unit_price: 180,
+                quantity: 1,
+                image_url: null,
+                is_veg: true,
+              },
+            ],
+          },
+          version: 0,
+        })
+      );
+    },
+    { branchId }
+  );
+
+  await page.route(/\/api\/public\/menu\/meta(?:\?|$)/, async (route) => {
+    metaCalls += 1;
+    await route.fulfill({ json: { branch: menuFixture.branch, table: menuFixture.table } });
+  });
+  await page.route(/\/api\/public\/menu(?:\?|$)/, async (route) => {
+    menuCalls += 1;
+    await route.fulfill({ json: menuFixture });
+  });
+
+  await page.goto(`/order/${branchId}/1/payment`);
+  await expect(page.getByRole("heading", { name: /review and send order/i })).toBeVisible();
+  await expect.poll(() => metaCalls).toBe(1);
+  await expect(page.getByLabel("Name optional")).toBeVisible();
+  await expect(page.getByLabel("Phone optional")).toBeVisible();
+  await expect(page.getByLabel("Order note")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^place order$/i })).toHaveCount(1);
+
+  expect(menuCalls).toBe(0);
+  expect(metaCalls).toBe(1);
 });

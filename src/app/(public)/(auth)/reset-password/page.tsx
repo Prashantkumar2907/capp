@@ -35,8 +35,8 @@ export default function ResetPasswordPage() {
         <h1 className="text-xl font-semibold">Choose a new password</h1>
         <form onSubmit={submit} className="mt-6 space-y-4">
           <div className="space-y-1.5">
-            <Label>New password</Label>
-            <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required />
+            <Label htmlFor="new-password">New password</Label>
+            <Input id="new-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required />
           </div>
           <Button className="w-full" disabled={loading || password.length < 8}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

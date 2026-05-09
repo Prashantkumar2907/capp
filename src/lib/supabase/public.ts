@@ -2,7 +2,7 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { PublicFeedbackInput, PublicMenuQueryInput } from "@/lib/validation/schemas";
 import type { Branch, Category, Dish, Order, OrderItem, Payment, RestaurantTable } from "@/types/database";
 
-type PublicResult<T> = { ok: true; data: T } | { ok: false; status: number; code: string; message: string };
+export type PublicResult<T> = { ok: true; data: T } | { ok: false; status: number; code: string; message: string };
 
 type BranchWithOrganization = Branch & {
   organizations: { name: string; default_tax_percent: number; tax_inclusive: boolean } | null;
@@ -34,6 +34,9 @@ export type PublicMenuPayload = {
   dishes: Array<PublicMenuDish & { categories: Pick<Category, "name"> | null }>;
 };
 
+export type PublicBranchMenuPayload = Omit<PublicMenuPayload, "table">;
+export type PublicMenuMetaPayload = Pick<PublicMenuPayload, "branch" | "table">;
+
 export type PublicReceiptOrder = Order & {
   order_items: OrderItem[];
   payments: Payment[];
@@ -42,44 +45,79 @@ export type PublicReceiptOrder = Order & {
 
 export async function getPublicMenu(input: PublicMenuQueryInput): Promise<PublicResult<PublicMenuPayload>> {
   const admin = createAdminSupabase();
-  const { data: branch, error: branchError } = await admin
+  const [menuResult, tableResult] = await Promise.all([getPublicBranchMenuWithClient(admin, input.branchId), getPublicTableWithClient(admin, input)]);
+
+  if (!menuResult.ok) return menuResult;
+  if (!tableResult.ok) return tableResult;
+
+  return {
+    ok: true,
+    data: {
+      ...menuResult.data,
+      table: tableResult.data.table,
+    },
+  };
+}
+
+export async function getPublicBranchMenu(branchId: string): Promise<PublicResult<PublicBranchMenuPayload>> {
+  return getPublicBranchMenuWithClient(createAdminSupabase(), branchId);
+}
+
+export async function getPublicTable(input: PublicMenuQueryInput): Promise<PublicResult<{ table: PublicMenuTable | null }>> {
+  return getPublicTableWithClient(createAdminSupabase(), input);
+}
+
+export async function getPublicMenuMeta(input: PublicMenuQueryInput): Promise<PublicResult<PublicMenuMetaPayload>> {
+  const admin = createAdminSupabase();
+  const [branchResult, tableResult] = await Promise.all([getPublicBranchMetaWithClient(admin, input.branchId), getPublicTableWithClient(admin, input)]);
+
+  if (!branchResult.ok) return branchResult;
+  if (!tableResult.ok) return tableResult;
+
+  return {
+    ok: true,
+    data: {
+      branch: branchResult.data.branch,
+      table: tableResult.data.table,
+    },
+  };
+}
+
+type AdminSupabaseClient = ReturnType<typeof createAdminSupabase>;
+
+async function getPublicBranchMetaWithClient(admin: AdminSupabaseClient, branchId: string): Promise<PublicResult<{ branch: PublicMenuBranch }>> {
+  const { data: branch, error } = await admin
     .from("branches")
     .select("id, org_id, name, address, city, organizations(name, default_tax_percent, tax_inclusive)")
-    .eq("id", input.branchId)
+    .eq("id", branchId)
     .eq("is_active", true)
     .single();
 
-  if (branchError || !branch) {
+  if (error || !branch) {
     return failure(404, "BRANCH_NOT_FOUND", "Branch not found");
   }
 
-  const [{ data: table }, { data: categories, error: categoriesError }, { data: branchDishes, error: menuError }] = await Promise.all([
-    input.tableNumber
-      ? admin
-          .from("tables")
-          .select("id, branch_id, table_number, label, capacity, status")
-          .eq("branch_id", input.branchId)
-          .eq("table_number", input.tableNumber)
-          .eq("is_active", true)
-          .maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
+  return { ok: true, data: { branch: branch as PublicMenuBranch } };
+}
+
+async function getPublicBranchMenuWithClient(admin: AdminSupabaseClient, branchId: string): Promise<PublicResult<PublicBranchMenuPayload>> {
+  const branchResult = await getPublicBranchMetaWithClient(admin, branchId);
+  if (!branchResult.ok) return branchResult;
+
+  const [{ data: categories, error: categoriesError }, { data: branchDishes, error: menuError }] = await Promise.all([
     admin
       .from("categories")
       .select("id, org_id, name, sort_order, is_active")
-      .eq("org_id", (branch as Pick<Branch, "org_id">).org_id)
+      .eq("org_id", branchResult.data.branch.org_id)
       .eq("is_active", true)
       .order("sort_order"),
     admin
       .from("branch_dishes")
       .select("custom_price, is_available, dishes(id, category_id, name, description, price, image_url, is_veg, is_active, prep_time_mins, categories(name))")
-      .eq("branch_id", input.branchId)
+      .eq("branch_id", branchId)
       .eq("is_available", true)
       .order("created_at", { ascending: true }),
   ]);
-
-  if (input.tableNumber && !table) {
-    return failure(404, "TABLE_NOT_FOUND", "Table not found");
-  }
 
   if (categoriesError || menuError) {
     return failure(400, "MENU_LOOKUP_FAILED", "Unable to load menu");
@@ -94,17 +132,33 @@ export async function getPublicMenu(input: PublicMenuQueryInput): Promise<Public
         categories: row.dishes.categories,
       };
     })
-    .filter((dish): dish is Dish & { categories: Pick<Category, "name"> | null } => Boolean(dish));
+    .filter((dish): dish is PublicMenuDish & { categories: Pick<Category, "name"> | null } => Boolean(dish));
 
   return {
     ok: true,
     data: {
-      branch: branch as PublicMenuBranch,
-      table: table as PublicMenuTable | null,
+      branch: branchResult.data.branch,
       categories: categories ?? [],
       dishes,
     },
   };
+}
+
+async function getPublicTableWithClient(admin: AdminSupabaseClient, input: PublicMenuQueryInput): Promise<PublicResult<{ table: PublicMenuTable | null }>> {
+  if (!input.tableNumber) return { ok: true, data: { table: null } };
+
+  const { data: table, error } = await admin
+    .from("tables")
+    .select("id, branch_id, table_number, label, capacity, status")
+    .eq("branch_id", input.branchId)
+    .eq("table_number", input.tableNumber)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error) return failure(400, "TABLE_LOOKUP_FAILED", "Unable to load table");
+  if (!table) return failure(404, "TABLE_NOT_FOUND", "Table not found");
+
+  return { ok: true, data: { table: table as PublicMenuTable } };
 }
 
 export async function getPublicReceipt(orderId: string): Promise<PublicResult<{ order: PublicReceiptOrder }>> {
