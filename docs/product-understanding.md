@@ -37,6 +37,7 @@ The product value is speed and trust at service time: customers can order withou
 - Public routes: `src/app/(public)/page.tsx`, `src/app/(public)/(auth)/*`, `src/app/(public)/order/[branchId]/[tableNumber]/page.tsx`, `src/app/(public)/order/[branchId]/[tableNumber]/payment/page.tsx`, `src/app/(public)/receipt/[orderId]/page.tsx`.
 - Dashboard routes: `src/app/(dashboard)/layout.tsx`, `src/components/layouts/dashboard-shell.tsx`, `src/app/(dashboard)/dashboard/**/page.tsx`.
 - API routes: `src/app/api/orders/route.ts`, `src/app/api/orders/[orderId]/status/route.ts`, `src/app/api/public/*`, `src/app/api/menu/dishes/*`, `src/app/api/branches/*`, `src/app/api/staff/*`, `src/app/api/payments/[paymentId]/settle/route.ts`, `src/app/api/v1/webhooks/razorpay/route.ts`.
+- API routes added in the hardening pass: `src/app/api/onboarding/route.ts`, `src/app/api/tables/route.ts`, `src/app/api/tables/[tableId]/route.ts`.
 - Data access: `src/lib/supabase/client.ts`, `src/lib/supabase/server.ts`, `src/lib/supabase/admin.ts`, `src/lib/supabase/queries.ts`, and trusted service modules in `src/lib/supabase/*.ts`.
 - Auth and authorization: `src/features/auth/auth-provider.tsx`, `src/lib/supabase/permissions.ts`, `src/lib/constants.ts`, `src/proxy.ts`.
 - Validation and API contract: `src/lib/validation/schemas.ts`, `src/lib/api/responses.ts`, `src/lib/api/client.ts`.
@@ -47,27 +48,30 @@ The product value is speed and trust at service time: customers can order withou
 
 ### Security Risks
 
-- Public receipt and menu endpoints were not fully aligned with the shared API response and validation pattern.
-- Customer feedback was written directly from the browser through Supabase instead of passing through a server-side validation and order-ownership check.
-- RLS still allowed anonymous direct select/insert access to orders, order items, payments, and feedback even though the app now has server API routes for those public workflows.
-- Storage policies allowed any signed-in user to write dish images, instead of limiting writes to menu-capable staff roles.
-- Security-definer RLS helper functions should pin `search_path` to reduce SQL search-path risk.
+- Open redirect risk is mitigated by `safeRedirectPath` in the OAuth callback and sign-in redirect flow.
+- Onboarding now validates with `onboardingSchema`, returns the shared API error contract, and rolls back partial workspace creation.
+- Table creation and table status changes now go through trusted API/service code with role and branch checks.
+- Remaining risk: authenticated settings and category edits still use direct browser Supabase mutations. RLS scopes these, but future passes should move them behind service-backed APIs for consistent validation and audit logging.
+- Remaining risk: public receipt URLs are bearer-style identifiers. They avoid direct anonymous table access, but a future pass should consider short-lived receipt tokens for stricter sharing control.
 
 ### Missing DB Indexes / Performance Bottlenecks
 
 - Table release checks filter active orders by `branch_id`, `table_number`, and operational status. A partial active-table index should support this path.
 - Menu/category ordering reads can benefit from an organization/sort index as the menu grows.
 - Dish management reads order by organization/name and should have an index that matches the query shape.
+- Table status and waiter floor views now have `idx_tables_branch_status` for branch/status filtering.
+- Remaining risk: payments, menu, and staff pages paginate client-side after fetching full branch/org result sets. This is acceptable for the demo scale but should become server pagination before high-volume production use.
 
 ### UI/UX Dead Ends
 
-- Public menu search/category filters could render an empty grid without an explicit empty state.
-- Waiter POS could render an empty dish grid or hide menu query failures instead of presenting an actionable state.
-- Dashboard route changes had no shell-level transition, so navigation felt abrupt despite existing component-level motion.
-- Analytics should surface query errors explicitly instead of silently rendering zeroed charts.
+- Tables now show an explicit error empty state if branch table data cannot load.
+- Route-level skeletons and error boundaries cover dashboard and public QR flows.
+- Remaining risk: some form dialogs still rely on toast errors only. Future passes should add inline field validation feedback while preserving server validation as the source of truth.
+- Remaining risk: the public marketing homepage is less operationally important than the app shell, but its hero is still more static than the dashboard surfaces.
 
 ### Code Smells
 
-- Public route handlers contained inline Supabase query composition, making response contracts and validation less consistent than staff mutation routes.
-- Direct Supabase mutations still exist in lower-risk authenticated settings/tables/category flows; the highest-risk public feedback path should move first, and future passes can continue migrating admin mutations into service-backed APIs.
-- Several dashboard pages still duplicate loading skeleton markup instead of consistently reusing `DashboardRouteSkeleton`.
+- Onboarding business logic has been moved from the route handler into `src/lib/supabase/onboarding.ts`.
+- Table mutation logic lives in `src/lib/supabase/table-management.ts` instead of inside `TablesPage`.
+- Remaining smell: settings and category mutations still sit in page components; move them into `src/lib/supabase/settings-management.ts` and `src/lib/supabase/category-management.ts` in a future pass.
+- Remaining smell: several dashboard pages still duplicate loading skeleton markup instead of consistently reusing `DashboardRouteSkeleton`.

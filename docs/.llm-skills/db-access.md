@@ -13,6 +13,7 @@ Use this before editing Supabase data access, SQL, or performance-sensitive quer
 - Server cookie client: `src/lib/supabase/server.ts`
 - Shared query reads: `src/lib/supabase/queries.ts`
 - Trusted mutation services: `src/lib/supabase/*.ts`
+- Current trusted services include onboarding, branch/staff management, menu dishes, order creation/status, payment settlement/webhooks, public menu/receipt/feedback, and table management.
 - DB type contract: `src/types/database.ts`
 
 ## Rules
@@ -20,6 +21,8 @@ Use this before editing Supabase data access, SQL, or performance-sensitive quer
 - Prefer service functions under `src/lib/supabase` for trusted writes and cross-table reads.
 - Use the browser client for scoped authenticated reads only when RLS is sufficient and no trusted mutation is needed.
 - Public routes that expose restaurant/customer data should validate params and use admin services with deliberately narrow selects.
+- Table mutations should go through `src/lib/supabase/table-management.ts`; setting a table to `inactive` must also set `is_active=false` so public QR links stop resolving.
+- Onboarding should go through `src/lib/supabase/onboarding.ts`; keep rollback behavior when adding new setup steps.
 - Add indexes for new hot filters before adding route or dashboard features that query by foreign key, status, branch, org, date, or idempotency key.
 - Keep `src/lib/performance/budgets.ts` and `tests/unit/db-indexes.test.ts` aligned with new hot-path indexes.
 - Security-definer functions should set a stable `search_path`.

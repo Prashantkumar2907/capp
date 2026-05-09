@@ -8,6 +8,7 @@ Use this before changing CAPP authentication or staff authorization.
 - `src/features/auth/auth-provider.tsx` hydrates the client user, active staff record, organization, branch, role, and `canAccess` helper.
 - `src/lib/supabase/server.ts` creates the SSR Supabase client from cookies.
 - `src/lib/supabase/permissions.ts` is the server-side staff context and role guard layer.
+- `safeRedirectPath` from `src/lib/utils` must sanitize any user-controlled `redirect` parameter before calling `router.push` or `NextResponse.redirect`.
 
 ## Rules
 
@@ -17,6 +18,7 @@ Use this before changing CAPP authentication or staff authorization.
 - Feature-specific checks use `requireStaffRole(staff, [...roles])`.
 - Dashboard navigation can hide links client-side, but API routes must enforce the same role rules server-side.
 - Public customer flows should use explicit public API routes and service-role server checks, not anonymous direct table writes.
+- OAuth callbacks and auth UI must only redirect to same-origin relative paths. Never pass raw query-string redirects to navigation APIs.
 
 ## Safe Pattern
 

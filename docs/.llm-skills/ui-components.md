@@ -15,6 +15,7 @@ Use this before changing CAPP screens or shared UI.
 
 - Every user-facing route should handle loading, empty, error, and success states.
 - Prefer existing primitives: `Button`, `Card`, `Dialog`, `Input`, `Select`, `Skeleton`, `Pagination`, `EmptyState`, `PageHeader`, `StatCard`, and `RouteErrorState`.
+- For page-level data fetch failures, prefer `EmptyState` or `RouteErrorState` with safe copy over raw provider error text.
 - Use lucide icons in icon buttons and user actions.
 - Keep operational SaaS screens compact and scannable. Avoid marketing-style hero layouts inside the dashboard.
 - Use subtle motion from existing CSS classes such as `animate-soft-rise` and `animate-popover-in`.
@@ -27,3 +28,4 @@ Use this before changing CAPP screens or shared UI.
 - Check desktop, tablet, and mobile widths for changed customer/staff flows.
 - Watch for horizontal overflow at 360px.
 - Confirm buttons have accessible names and loading actions disable duplicate requests.
+- When moving a direct Supabase mutation behind an API route, update the UI to use `readApiResponse` so toast copy remains consistent with the shared server error contract.

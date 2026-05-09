@@ -56,4 +56,6 @@ Add a new kitchen UI widget in `src/components/features/kitchen`, keep shared ba
 
 Add menu mutations behind `src/app/api/menu/...`, validate request bodies in `src/lib/validation`, and keep trusted Supabase writes in `src/lib/supabase/menu-management.ts`. Client menu editors may upload media to public storage, but prices, category ownership, branch availability, and restaurant ownership must be verified server-side.
 
+Add table mutations behind `src/app/api/tables/...`, validate request bodies in `src/lib/validation`, and keep branch/role checks in `src/lib/supabase/table-management.ts`. Keep `status` and `is_active` aligned so inactive tables do not keep public QR links alive.
+
 Add a new migration as the next ordered file in `supabase`, update `src/types/database.ts` if the application reads the new shape, and add a DB or API verification test in `tests`.
