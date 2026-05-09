@@ -8,6 +8,8 @@ CAPP is a production restaurant SaaS. Code should stay close to the route, featu
 
 `src/app/(dashboard)` contains authenticated restaurant workspace routes. Pages in this group render inside the dashboard shell and must enforce role-aware navigation and tenant-scoped data access.
 
+`src/app/admin` contains platform-owner workflows for the CAPP operator. It is authenticated, but not tenant-scoped by restaurant staff role. It must call `/api/platform/*` routes and show portfolio-level customer/subscription data only after platform-admin authorization.
+
 `src/app/api` contains server-only API boundaries for public ordering, staff operations, health checks, webhooks, and integration callbacks. API routes must validate inputs, return consistent response shapes, avoid leaking provider details, and never trust client-supplied prices, totals, roles, payment state, or branch ownership.
 
 Every route that fetches data should include a `loading.tsx` skeleton matching the final layout and an `error.tsx` or component-level error state that offers retry/recovery without rendering raw provider error details.
@@ -57,5 +59,7 @@ Add a new kitchen UI widget in `src/components/features/kitchen`, keep shared ba
 Add menu mutations behind `src/app/api/menu/...`, validate request bodies in `src/lib/validation`, and keep trusted Supabase writes in `src/lib/supabase/menu-management.ts`. Client menu editors may upload media to public storage, but prices, category ownership, branch availability, and restaurant ownership must be verified server-side.
 
 Add table mutations behind `src/app/api/tables/...`, validate request bodies in `src/lib/validation`, and keep branch/role checks in `src/lib/supabase/table-management.ts`. Keep `status` and `is_active` aligned so inactive tables do not keep public QR links alive.
+
+Add platform admin features behind `src/app/api/platform/...`, validate request bodies in `src/lib/validation`, and keep cross-tenant reads/writes in `src/lib/supabase/platform-admin.ts`. Use `platform_admins` for authorization and `subscription_grants` for manual grant audit history.
 
 Add a new migration as the next ordered file in `supabase`, update `src/types/database.ts` if the application reads the new shape, and add a DB or API verification test in `tests`.

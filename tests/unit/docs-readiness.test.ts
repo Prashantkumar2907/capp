@@ -18,6 +18,7 @@ test("production operations docs cover release-critical setup topics", () => {
     "docs/product-understanding.md",
     "docs/.llm-skills/auth-pattern.md",
     "docs/.llm-skills/db-access.md",
+    "docs/.llm-skills/platform-admin.md",
     "docs/.llm-skills/ui-components.md",
   ].forEach((path) => assert.equal(existsSync(path), true, `${path} should exist`));
 
@@ -30,6 +31,7 @@ test("production operations docs cover release-critical setup topics", () => {
 
   [
     "SUPABASE_SERVICE_ROLE_KEY",
+    "PLATFORM_ADMIN_EMAILS",
     "RAZORPAY_WEBHOOK_SECRET",
     "Migration Order",
     "Rollback",

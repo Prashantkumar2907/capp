@@ -11,6 +11,8 @@ The Supabase seed creates four deterministic restaurant personas for sales, QA, 
 
 The seed includes realistic branches, tables, categories, dishes, placeholder dish images, availability differences, orders, order items, payments, subscriptions, feedback, and activity logs. Staff coverage spans owner, admin, manager, waiter, kitchen, cashier, and a disabled staff member for access-removal checks.
 
+The seed also inserts `admin@example.com` as a platform admin and creates subscription grant audit rows for the demo customer portfolio. Use this account only in disposable demo environments, with a temporary password configured through Supabase Auth or the app's demo account process.
+
 Demo emails use the `demo.capp.local` domain and are not real personal accounts. Customer names are generic role labels such as `Cafe guest` and `Pickup guest`; no real customer identifiers or payment credentials are seeded.
 
 Dish images use stable placeholder image URLs today. Production imports should upload final sales/demo media to the public `dish-images` Supabase storage bucket and store the resulting public URL on `dishes.image_url`; the UI lazy-loads those images with dish-name alt text and falls back to an accessible dish placeholder if media fails. Public QR links are stored on seeded table rows as `/order/<branchId>/<tableNumber>`.

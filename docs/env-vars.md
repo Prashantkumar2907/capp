@@ -20,6 +20,7 @@ Never commit `.env.local`, provider secrets, service role keys, database passwor
 
 ## Optional Operations
 - `ALLOW_DESTRUCTIVE_DB_RESET`: Set to `1` only for a disposable database when running destructive seed/reset SQL.
+- `PLATFORM_ADMIN_EMAILS`: Optional comma-separated bootstrap allowlist for app-creator accounts that may access `/admin`; production should also keep matching rows in `platform_admins`.
 - `PORT`: Local Next.js port override for Playwright, for example `3100`.
 
 ## Secret-Handling Rules
