@@ -1,0 +1,24 @@
+{
+  "allowedTools": [
+    "read_file",
+    "create_file",
+    "replace_string_in_file",
+    "run_in_terminal",
+    "grep_search",
+    "semantic_search",
+    "file_search",
+    "get_errors"
+  ],
+  "contextFiles": [
+    "package.json",
+    "README.md",
+    "docs/architecture/file-structure.md",
+    "docs/product-understanding.md",
+    "src/lib/constants.ts",
+    "src/lib/api/responses.ts",
+    "src/lib/validation/schemas.ts",
+    "src/lib/env.ts",
+    "src/lib/performance/budgets.ts",
+    "src/proxy.ts"
+  ]
+}
