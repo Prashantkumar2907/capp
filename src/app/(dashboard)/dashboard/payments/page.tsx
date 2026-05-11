@@ -17,6 +17,7 @@ import { StatCard } from "@/components/shared/stat-card";
 import { readApiResponse } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, formatDateTime, upiLink } from "@/lib/utils";
+import { operationalListFetchLimit } from "@/lib/constants";
 import { usePagination } from "@/hooks/use-pagination";
 import { useAuth } from "@/features/auth/auth-provider";
 import type { Order, Payment } from "@/types/database";
@@ -38,7 +39,8 @@ export default function PaymentsPage() {
         .from("payments")
         .select("*, orders(order_number, table_number, customer_name, total, status)")
         .eq("branch_id", branch!.id)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(operationalListFetchLimit);
       if (error) throw error;
       return (data ?? []) as PaymentRow[];
     },
@@ -103,7 +105,7 @@ export default function PaymentsPage() {
         <StatCard label="Collected" value={formatCurrency(stats.collected)} icon={IndianRupee} tone="success" />
         <StatCard label="Pending" value={formatCurrency(stats.pending)} icon={Banknote} tone="warning" />
         <StatCard label="Failed" value={stats.failed} icon={CreditCard} tone="info" />
-        <StatCard label="Total records" value={stats.count} icon={CheckCircle2} />
+        <StatCard label="Loaded records" value={stats.count} icon={CheckCircle2} />
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-64 flex-1 sm:max-w-sm">

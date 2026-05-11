@@ -16,6 +16,28 @@ test("operational list pages use shared pagination", () => {
   });
 });
 
+test("operational list reads are bounded before client pagination", () => {
+  const constants = readFileSync("src/lib/constants.ts", "utf8");
+  const queries = readFileSync("src/lib/supabase/queries.ts", "utf8");
+  const payments = readFileSync("src/app/(dashboard)/dashboard/payments/page.tsx", "utf8");
+  const staff = readFileSync("src/app/(dashboard)/dashboard/staff/page.tsx", "utf8");
+
+  assert.match(constants, /operationalListFetchLimit = 100/);
+  assert.match(queries, /\.limit\(operationalListFetchLimit\)/);
+  assert.match(payments, /\.limit\(operationalListFetchLimit\)/);
+  assert.match(staff, /\.limit\(operationalListFetchLimit\)/);
+});
+
+test("management icon actions expose accessible labels", () => {
+  const menu = readFileSync("src/app/(dashboard)/dashboard/menu/page.tsx", "utf8");
+  const staff = readFileSync("src/app/(dashboard)/dashboard/staff/page.tsx", "utf8");
+
+  assert.match(menu, /aria-label=\{`Edit \$\{dish\.name\}`\}/);
+  assert.match(menu, /aria-label=\{`Remove \$\{dish\.name\}`\}/);
+  assert.match(staff, /aria-label=\{`Edit \$\{member\.full_name/);
+  assert.match(staff, /aria-label=\{`Remove \$\{member\.full_name/);
+});
+
 test("pagination primitive exposes accessible page controls and page size", () => {
   const source = readFileSync("src/components/ui/pagination.tsx", "utf8");
 

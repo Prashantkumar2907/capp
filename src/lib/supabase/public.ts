@@ -4,10 +4,6 @@ import type { Branch, Category, Dish, Order, OrderItem, Payment, RestaurantTable
 
 export type PublicResult<T> = { ok: true; data: T } | { ok: false; status: number; code: string; message: string };
 
-type BranchWithOrganization = Branch & {
-  organizations: { name: string; default_tax_percent: number; tax_inclusive: boolean } | null;
-};
-
 type BranchDishRow = {
   custom_price: number | null;
   is_available: boolean;
@@ -37,10 +33,10 @@ export type PublicMenuPayload = {
 export type PublicBranchMenuPayload = Omit<PublicMenuPayload, "table">;
 export type PublicMenuMetaPayload = Pick<PublicMenuPayload, "branch" | "table">;
 
-export type PublicReceiptOrder = Order & {
-  order_items: OrderItem[];
-  payments: Payment[];
-  branches: BranchWithOrganization | null;
+export type PublicReceiptOrder = Pick<Order, "id" | "order_number" | "branch_id" | "table_number" | "status" | "subtotal" | "tax" | "discount" | "total" | "created_at"> & {
+  order_items: Array<Pick<OrderItem, "id" | "dish_name" | "quantity" | "price_at_order" | "notes">>;
+  payments: Array<Pick<Payment, "id" | "amount" | "method" | "status">>;
+  branches: (Pick<Branch, "id" | "name" | "upi_vpa"> & { organizations: { name: string; default_tax_percent: number; tax_inclusive: boolean } | null }) | null;
 };
 
 export async function getPublicMenu(input: PublicMenuQueryInput): Promise<PublicResult<PublicMenuPayload>> {
@@ -165,7 +161,9 @@ export async function getPublicReceipt(orderId: string): Promise<PublicResult<{ 
   const admin = createAdminSupabase();
   const { data: order, error } = await admin
     .from("orders")
-    .select("*, order_items(*), payments(*), branches(*, organizations(name, default_tax_percent, tax_inclusive))")
+    .select(
+      "id, order_number, branch_id, table_number, status, subtotal, tax, discount, total, created_at, order_items(id, dish_name, quantity, price_at_order, notes), payments(id, amount, method, status), branches(id, name, upi_vpa, organizations(name, default_tax_percent, tax_inclusive))"
+    )
     .eq("id", orderId)
     .single();
 

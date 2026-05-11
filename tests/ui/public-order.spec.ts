@@ -210,6 +210,9 @@ test("public QR payment sends one idempotent order request on duplicate clicks",
   const submitted = submittedBodies[0];
   expect(submitted).toBeTruthy();
   expect(String(submitted?.clientRequestId)).toMatch(/^[a-z0-9:_-]{12,96}$/i);
+  expect(submitted).not.toHaveProperty("customerName");
+  expect(submitted).not.toHaveProperty("customerPhone");
+  expect(submitted).not.toHaveProperty("notes");
   expect(JSON.stringify(submitted)).not.toContain("price_at_order");
   expect(JSON.stringify(submitted)).not.toContain("unit_price");
 });
@@ -295,6 +298,13 @@ test("direct public QR payment uses lightweight metadata and one mobile submit a
   await expect(page.getByLabel("Name optional")).toBeVisible();
   await expect(page.getByLabel("Phone optional")).toBeVisible();
   await expect(page.getByLabel("Order note")).toBeVisible();
+  await page.getByLabel("Name optional").fill("A".repeat(120));
+  await page.getByLabel("Phone optional").fill("9".repeat(80));
+  const longOrderNote = "Kitchen note ".repeat(60);
+  await page.getByLabel("Order note").fill(longOrderNote);
+  await expect(page.getByLabel("Name optional")).toHaveValue("A".repeat(80));
+  await expect(page.getByLabel("Phone optional")).toHaveValue("9".repeat(24));
+  await expect(page.getByLabel("Order note")).toHaveValue(longOrderNote.slice(0, 500));
   await expect(page.getByRole("button", { name: /^place order$/i })).toHaveCount(1);
 
   expect(menuCalls).toBe(0);

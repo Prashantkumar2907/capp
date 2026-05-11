@@ -101,6 +101,7 @@ export function CartPanel({
                   <Textarea
                     rows={2}
                     value={item.notes ?? ""}
+                    maxLength={240}
                     placeholder="Item note"
                     aria-label={`Note for ${item.dish_name}`}
                     onChange={(event) => onNotes(item.dish_id, event.target.value)}

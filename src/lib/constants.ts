@@ -35,6 +35,8 @@ export const paymentMethods = ["cash", "upi", "card", "razorpay"] as const;
 
 export const paymentStatuses = ["pending", "completed", "failed", "refunded"] as const;
 
+export const operationalListFetchLimit = 100;
+
 export type Role = (typeof roles)[number];
 export type OrderStatus = (typeof orderStatuses)[number];
 export type OperationalOrderStatus = (typeof operationalOrderStatuses)[number];

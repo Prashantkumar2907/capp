@@ -14,13 +14,7 @@ import { OrderStatusBadge } from "@/components/shared/status-badge";
 import { AppToaster } from "@/components/shared/app-toaster";
 import { readApiResponse } from "@/lib/api/client";
 import { formatCurrency, formatDateTime, upiLink } from "@/lib/utils";
-import type { Branch, Order, OrderItem, Payment } from "@/types/database";
-
-type ReceiptOrder = Order & {
-  order_items: OrderItem[];
-  payments: Payment[];
-  branches: (Branch & { organizations: { name: string; default_tax_percent: number; tax_inclusive: boolean } | null }) | null;
-};
+import type { PublicReceiptOrder } from "@/lib/supabase/public";
 
 export default function ReceiptPage() {
   const params = useParams<{ orderId: string }>();
@@ -32,7 +26,7 @@ export default function ReceiptPage() {
     queryKey: ["receipt", orderId],
     queryFn: async () => {
       const response = await fetch(`/api/public/receipt?orderId=${orderId}`);
-      const payload = (await response.json()) as { error?: string; order?: ReceiptOrder };
+      const payload = (await response.json()) as { error?: string; order?: PublicReceiptOrder };
       if (!response.ok || !payload.order) throw new Error(payload.error ?? "Receipt not found");
       return payload.order;
     },

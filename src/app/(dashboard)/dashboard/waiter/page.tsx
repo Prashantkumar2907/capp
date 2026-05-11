@@ -76,10 +76,10 @@ export default function WaiterPage() {
           branchId: branch!.id,
           tableNumber,
           clientRequestId: requestIdRef.current,
-          customerName,
+          customerName: customerName.trim() || undefined,
           orderSource: "waiter",
           orderType: tableNumber ? "dine_in" : "takeaway",
-          notes,
+          notes: notes.trim() || undefined,
           items: items.map((item) => ({
             dish_id: item.dish_id,
             quantity: item.quantity,
@@ -204,8 +204,8 @@ export default function WaiterPage() {
         </section>
         <aside className="space-y-3">
           <div className="space-y-3 rounded-2xl border bg-card p-4">
-            <Input placeholder="Customer name optional" value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
-            <Textarea placeholder="Order notes for kitchen" value={notes} onChange={(event) => setNotes(event.target.value)} />
+            <Input placeholder="Customer name optional" value={customerName} maxLength={80} onChange={(event) => setCustomerName(event.target.value)} />
+            <Textarea placeholder="Order notes for kitchen" value={notes} maxLength={500} onChange={(event) => setNotes(event.target.value)} />
           </div>
           <CartPanel
             items={items}

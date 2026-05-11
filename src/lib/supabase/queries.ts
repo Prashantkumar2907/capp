@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { orderStatuses } from "@/lib/constants";
+import { operationalListFetchLimit, orderStatuses } from "@/lib/constants";
 import { buildDashboardSummary } from "@/lib/analytics/dashboard-summary";
 import type { Database, DishWithRelations, OrderWithItems } from "@/types/database";
 
@@ -52,7 +52,8 @@ export async function getOrdersWithItems(supabase: TypedSupabase, branchId: stri
     .select("*, order_items(*)")
     .eq("branch_id", branchId)
     .in("status", [...orderStatuses])
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(operationalListFetchLimit);
   if (error) throw error;
   return (data ?? []) as OrderWithItems[];
 }

@@ -17,7 +17,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { readApiResponse } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
-import { roleLabels, roles, type Role } from "@/lib/constants";
+import { operationalListFetchLimit, roleLabels, roles, type Role } from "@/lib/constants";
 import { initials } from "@/lib/utils";
 import { usePagination } from "@/hooks/use-pagination";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -37,7 +37,7 @@ export default function StaffPage() {
   const staff = useQuery({
     queryKey: ["staff", organization?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("staff").select("*").eq("org_id", organization!.id).order("created_at");
+      const { data, error } = await supabase.from("staff").select("*").eq("org_id", organization!.id).order("created_at").limit(operationalListFetchLimit);
       if (error) throw error;
       return data ?? [];
     },
@@ -130,8 +130,8 @@ export default function StaffPage() {
                     <Badge><Shield className="h-3 w-3" />{roleLabels[member.role]}</Badge>
                     {member.id !== currentStaff?.id ? (
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => edit(member)}><Edit2 className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => remove.mutate(member.id)}><Trash2 className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" aria-label={`Edit ${member.full_name ?? member.email ?? "staff member"}`} onClick={() => edit(member)}><Edit2 className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="text-destructive" aria-label={`Remove ${member.full_name ?? member.email ?? "staff member"}`} onClick={() => remove.mutate(member.id)}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     ) : null}
                   </div>
@@ -153,11 +153,11 @@ export default function StaffPage() {
       )}
       <Dialog open={dialogOpen} title={editing ? "Edit staff" : "Add staff"} onOpenChange={setDialogOpen}>
         <div className="space-y-3">
-          <Field label="Full name"><Input value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} /></Field>
-          <Field label="Email"><Input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field>
-          <Field label="Phone"><Input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></Field>
-          <Field label="Role">
-            <Select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as Role })}>
+          <Field id="staff-full-name" label="Full name"><Input id="staff-full-name" value={form.full_name} maxLength={100} onChange={(event) => setForm({ ...form, full_name: event.target.value })} /></Field>
+          <Field id="staff-email" label="Email"><Input id="staff-email" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field>
+          <Field id="staff-phone" label="Phone"><Input id="staff-phone" value={form.phone} maxLength={24} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></Field>
+          <Field id="staff-role" label="Role">
+            <Select id="staff-role" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as Role })}>
               {roles.filter((role) => role !== "owner").map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}
             </Select>
           </Field>
@@ -168,6 +168,6 @@ export default function StaffPage() {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="space-y-1.5"><Label>{label}</Label>{children}</div>;
+function Field({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
+  return <div className="space-y-1.5"><Label htmlFor={id}>{label}</Label>{children}</div>;
 }

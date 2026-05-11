@@ -81,11 +81,11 @@ export default function PublicPaymentPage() {
           branchId,
           tableNumber,
           clientRequestId,
-          customerName,
-          customerPhone,
+          customerName: customerName.trim() || undefined,
+          customerPhone: customerPhone.trim() || undefined,
           orderSource: "qr_customer",
           orderType: "dine_in",
-          notes,
+          notes: notes.trim() || undefined,
           items: cart.items.map((item) => ({
             dish_id: item.dish_id,
             quantity: item.quantity,
@@ -137,14 +137,14 @@ export default function PublicPaymentPage() {
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <Field id="customer-name" label="Name optional">
-                  <Input id="customer-name" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Your name" />
+                  <Input id="customer-name" value={customerName} maxLength={80} onChange={(event) => setCustomerName(event.target.value)} placeholder="Your name" />
                 </Field>
                 <Field id="customer-phone" label="Phone optional">
-                  <Input id="customer-phone" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} placeholder="For bill updates" />
+                  <Input id="customer-phone" value={customerPhone} maxLength={24} inputMode="tel" onChange={(event) => setCustomerPhone(event.target.value)} placeholder="For bill updates" />
                 </Field>
               </div>
               <Field id="order-note" label="Order note">
-                <Textarea id="order-note" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Anything the kitchen should know" />
+                <Textarea id="order-note" value={notes} maxLength={500} onChange={(event) => setNotes(event.target.value)} placeholder="Anything the kitchen should know" />
               </Field>
               {!cartReady ? (
                 <div className="space-y-3 rounded-2xl border border-dashed p-4" aria-label="Loading saved cart">
