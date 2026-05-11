@@ -174,12 +174,27 @@ export default function PaymentsPage() {
                         </a>
                       ) : null}
                       {payment.status !== "completed" ? (
-                        <Button size="sm" disabled={updatePayment.isPending} onClick={() => updatePayment.mutate({ payment, nextStatus: "completed" })}>
+                        <Button
+                          size="sm"
+                          disabled={updatePayment.isPending}
+                          onClick={() => {
+                            if (window.confirm(`Mark payment ${payment.orders?.order_number ?? payment.id.slice(0, 8)} as paid?`)) {
+                              updatePayment.mutate({ payment, nextStatus: "completed" });
+                            }
+                          }}
+                        >
                           Mark paid
                         </Button>
                       ) : null}
                       {payment.status === "pending" ? (
-                        <Button variant="ghost" size="sm" disabled={updatePayment.isPending} onClick={() => updatePayment.mutate({ payment, nextStatus: "failed" })}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={updatePayment.isPending}
+                          onClick={() => {
+                            if (window.confirm("Mark this pending payment as failed?")) updatePayment.mutate({ payment, nextStatus: "failed" });
+                          }}
+                        >
                           Mark failed
                         </Button>
                       ) : null}

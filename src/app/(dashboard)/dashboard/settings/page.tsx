@@ -8,9 +8,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { FormField } from "@/components/ui/form-field";
 import { PageHeader } from "@/components/shared/page-header";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/features/auth/auth-provider";
@@ -91,24 +91,24 @@ export default function SettingsPage() {
             <CardContent className="space-y-4 p-4">
               <SectionTitle icon={Building2} title="Restaurant" description="Business identity and tax defaults." />
               <div className="grid gap-3 md:grid-cols-2">
-                <Field label="Restaurant name">
-                  <Input value={orgForm.name} onChange={(event) => setOrgForm({ ...orgForm, name: event.target.value })} />
-                </Field>
-                <Field label="Restaurant type">
-                  <Select value={orgForm.restaurant_type} onChange={(event) => setOrgForm({ ...orgForm, restaurant_type: event.target.value })}>
+                <FormField id="restaurant-name" label="Restaurant name">
+                  <Input id="restaurant-name" value={orgForm.name} onChange={(event) => setOrgForm({ ...orgForm, name: event.target.value })} />
+                </FormField>
+                <FormField id="restaurant-type" label="Restaurant type">
+                  <Select id="restaurant-type" value={orgForm.restaurant_type} onChange={(event) => setOrgForm({ ...orgForm, restaurant_type: event.target.value })}>
                     <option value="casual">Casual dining</option>
                     <option value="quick_service">Quick service</option>
                     <option value="cafe">Cafe</option>
                     <option value="cloud_kitchen">Cloud kitchen</option>
                     <option value="fine_dining">Fine dining</option>
                   </Select>
-                </Field>
-                <Field label="GST number">
-                  <Input value={orgForm.gst_number} onChange={(event) => setOrgForm({ ...orgForm, gst_number: event.target.value })} />
-                </Field>
-                <Field label="Default tax percent">
-                  <Input type="number" value={orgForm.default_tax_percent} onChange={(event) => setOrgForm({ ...orgForm, default_tax_percent: Number(event.target.value) })} />
-                </Field>
+                </FormField>
+                <FormField id="gst-number" label="GST number">
+                  <Input id="gst-number" value={orgForm.gst_number} onChange={(event) => setOrgForm({ ...orgForm, gst_number: event.target.value })} />
+                </FormField>
+                <FormField id="default-tax-percent" label="Default tax percent">
+                  <Input id="default-tax-percent" type="number" value={orgForm.default_tax_percent} onChange={(event) => setOrgForm({ ...orgForm, default_tax_percent: Number(event.target.value) })} />
+                </FormField>
               </div>
               <div className="flex items-center justify-between rounded-2xl border p-3">
                 <div>
@@ -127,21 +127,21 @@ export default function SettingsPage() {
             <CardContent className="space-y-4 p-4">
               <SectionTitle icon={Store} title="Branch" description="Location, table, and settlement details." />
               <div className="grid gap-3 md:grid-cols-2">
-                <Field label="Branch name">
-                  <Input value={branchForm.name} onChange={(event) => setBranchForm({ ...branchForm, name: event.target.value })} />
-                </Field>
-                <Field label="Phone">
-                  <Input value={branchForm.phone} onChange={(event) => setBranchForm({ ...branchForm, phone: event.target.value })} />
-                </Field>
-                <Field label="Address">
-                  <Input value={branchForm.address} onChange={(event) => setBranchForm({ ...branchForm, address: event.target.value })} />
-                </Field>
-                <Field label="City">
-                  <Input value={branchForm.city} onChange={(event) => setBranchForm({ ...branchForm, city: event.target.value })} />
-                </Field>
-                <Field label="UPI VPA">
-                  <Input value={branchForm.upi_vpa} onChange={(event) => setBranchForm({ ...branchForm, upi_vpa: event.target.value })} />
-                </Field>
+                <FormField id="branch-name" label="Branch name">
+                  <Input id="branch-name" value={branchForm.name} onChange={(event) => setBranchForm({ ...branchForm, name: event.target.value })} />
+                </FormField>
+                <FormField id="branch-phone" label="Phone">
+                  <Input id="branch-phone" value={branchForm.phone} onChange={(event) => setBranchForm({ ...branchForm, phone: event.target.value })} />
+                </FormField>
+                <FormField id="branch-address" label="Address">
+                  <Input id="branch-address" value={branchForm.address} onChange={(event) => setBranchForm({ ...branchForm, address: event.target.value })} />
+                </FormField>
+                <FormField id="branch-city" label="City">
+                  <Input id="branch-city" value={branchForm.city} onChange={(event) => setBranchForm({ ...branchForm, city: event.target.value })} />
+                </FormField>
+                <FormField id="branch-upi-vpa" label="UPI VPA">
+                  <Input id="branch-upi-vpa" value={branchForm.upi_vpa} onChange={(event) => setBranchForm({ ...branchForm, upi_vpa: event.target.value })} />
+                </FormField>
               </div>
               <Button disabled={!branchForm.name || saveBranch.isPending} onClick={() => saveBranch.mutate()}>
                 <Save className="h-4 w-4" />
@@ -186,15 +186,6 @@ export default function SettingsPage() {
           </Card>
         </aside>
       </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
-      {children}
     </div>
   );
 }

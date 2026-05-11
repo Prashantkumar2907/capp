@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const branchId = "b0000000-0000-0000-0000-000000000099";
+const reviewHeading = { name: /review and send order/i };
 
 const menuFixture = {
   branch: {
@@ -89,6 +90,7 @@ test("public QR ordering replaces skeletons with responsive menu content", async
 
 test("public QR payment sends one idempotent order request on duplicate clicks", async ({ page }) => {
   const orderId = "f0000000-0000-0000-0000-000000000099";
+  const receiptToken = "receipt_token_123456789012";
   const submittedBodies: Array<Record<string, unknown>> = [];
 
   await page.addInitScript(
@@ -125,7 +127,7 @@ test("public QR payment sends one idempotent order request on duplicate clicks",
   await page.route("**/api/orders", async (route) => {
     submittedBodies.push(route.request().postDataJSON() as Record<string, unknown>);
     await new Promise((resolve) => setTimeout(resolve, 250));
-    await route.fulfill({ json: { ok: true, order: { id: orderId }, duplicate: false } });
+    await route.fulfill({ json: { ok: true, order: { id: orderId, receipt_token: receiptToken }, receiptToken, duplicate: false } });
   });
 
   await page.route("**/api/public/receipt**", async (route) => {
@@ -197,7 +199,7 @@ test("public QR payment sends one idempotent order request on duplicate clicks",
   });
 
   await page.goto(`/order/${branchId}/1/payment`);
-  await expect(page.getByRole("heading", { name: /review and send order/i })).toBeVisible();
+  await expect(page.getByRole("heading", reviewHeading)).toBeVisible({ timeout: 15000 });
   await expect(page.getByLabel("Name optional")).toBeVisible();
   await expect(page.getByLabel("Phone optional")).toBeVisible();
   await expect(page.getByLabel("Order note")).toBeVisible();
@@ -207,7 +209,7 @@ test("public QR payment sends one idempotent order request on duplicate clicks",
   await expect(placeOrder).toBeEnabled();
 
   await placeOrder.dblclick();
-  await expect(page).toHaveURL(new RegExp(`/receipt/${orderId}$`), { timeout: 15000 });
+  await expect(page).toHaveURL(new RegExp(`/receipt/${orderId}\\?token=${receiptToken}$`), { timeout: 15000 });
 
   expect(submittedBodies).toHaveLength(1);
   const submitted = submittedBodies[0];
@@ -248,7 +250,7 @@ test("public QR payment reuses loaded menu metadata after menu navigation", asyn
   }
 
   await expect(page).toHaveURL(new RegExp(`/order/${branchId}/1/payment$`), { timeout: 15000 });
-  await expect(page.getByRole("heading", { name: /review and send order/i })).toBeVisible();
+  await expect(page.getByRole("heading", reviewHeading)).toBeVisible({ timeout: 15000 });
 
   expect(menuCalls).toBe(1);
   expect(metaCalls).toBe(0);
@@ -296,7 +298,7 @@ test("direct public QR payment uses lightweight metadata and one mobile submit a
   });
 
   await page.goto(`/order/${branchId}/1/payment`);
-  await expect(page.getByRole("heading", { name: /review and send order/i })).toBeVisible();
+  await expect(page.getByRole("heading", reviewHeading)).toBeVisible({ timeout: 15000 });
   await expect.poll(() => metaCalls).toBe(1);
   await expect(page.getByLabel("Name optional")).toBeVisible();
   await expect(page.getByLabel("Phone optional")).toBeVisible();

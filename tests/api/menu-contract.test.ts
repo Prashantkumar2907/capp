@@ -43,3 +43,37 @@ test("menu dish updates reject malformed ids before auth or database work", asyn
   assert.equal(body.code, "VALIDATION_ERROR");
   assert.match(body.error ?? "", /Invalid UUID/);
 });
+
+test("menu category creation rejects malformed payloads before auth or database work", async () => {
+  const { POST } = await import("../../src/app/api/menu/categories/route");
+  const request = new Request("http://localhost/api/menu/categories", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "A", sort_order: -1, is_active: true }),
+  }) as NextRequest;
+
+  const response = await POST(request);
+  const body = (await response.json()) as { ok: boolean; code?: string; error?: string };
+
+  assert.equal(response.status, 400);
+  assert.equal(body.ok, false);
+  assert.equal(body.code, "VALIDATION_ERROR");
+  assert.match(body.error ?? "", /name|sort_order/);
+});
+
+test("menu category updates reject malformed ids before auth or database work", async () => {
+  const { PATCH } = await import("../../src/app/api/menu/categories/[categoryId]/route");
+  const request = new Request("http://localhost/api/menu/categories/not-a-uuid", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Updated" }),
+  }) as NextRequest;
+
+  const response = await PATCH(request, { params: Promise.resolve({ categoryId: "not-a-uuid" }) });
+  const body = (await response.json()) as { ok: boolean; code?: string; error?: string };
+
+  assert.equal(response.status, 400);
+  assert.equal(body.ok, false);
+  assert.equal(body.code, "VALIDATION_ERROR");
+  assert.match(body.error ?? "", /Invalid UUID/);
+});

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { roleAccess, type Role } from "@/lib/constants";
@@ -25,6 +25,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [supabase] = useState(() => createClient());
+  const profileRequestRef = useRef(0);
   const [state, setState] = useState<AuthState>({
     user: null,
     staff: null,
@@ -34,8 +35,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   const loadProfile = useCallback(async (user: User | null) => {
+    const requestId = ++profileRequestRef.current;
+    const commit = (nextState: AuthState) => {
+      if (profileRequestRef.current === requestId) setState(nextState);
+    };
+
     if (!user) {
-      setState({ user: null, staff: null, organization: null, branch: null, loading: false });
+      commit({ user: null, staff: null, organization: null, branch: null, loading: false });
       return;
     }
 
@@ -47,7 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .maybeSingle();
 
     if (!staff) {
-      setState({ user, staff: null, organization: null, branch: null, loading: false });
+      commit({ user, staff: null, organization: null, branch: null, loading: false });
       return;
     }
 
@@ -56,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       staff.branch_id ? supabase.from("branches").select("*").eq("id", staff.branch_id).maybeSingle() : Promise.resolve({ data: null }),
     ]);
 
-    setState({ user, staff, organization, branch, loading: false });
+    commit({ user, staff, organization, branch, loading: false });
   }, [supabase]);
 
   useEffect(() => {
@@ -74,6 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       mounted = false;
+      profileRequestRef.current += 1;
       subscription.unsubscribe();
     };
   }, [loadProfile, supabase]);
@@ -91,6 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await loadProfile(data.user);
   }, [loadProfile, supabase]);
   const signOut = useCallback(async () => {
+    profileRequestRef.current += 1;
     await supabase.auth.signOut();
     setState({ user: null, staff: null, organization: null, branch: null, loading: false });
   }, [supabase]);

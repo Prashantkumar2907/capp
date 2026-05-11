@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CartPanel } from "@/components/features/cart/cart-panel";
 import { AppToaster } from "@/components/shared/app-toaster";
 import { readApiResponse } from "@/lib/api/client";
-import { PUBLIC_ORDER_RECEIPT_REDIRECT_KEY } from "@/lib/public-order";
+import { persistReceiptRedirect, publicReceiptPath, readPendingReceiptRedirect } from "@/lib/public-order";
 import { calculateTotals } from "@/lib/utils";
 import { useHasMounted } from "@/hooks/use-has-mounted";
 import { readStoredCartSnapshot, useCartStore } from "@/stores/cart-store";
@@ -46,8 +46,8 @@ export default function PublicPaymentPage() {
   const cartItems = cartReady ? cart.items : [];
 
   useEffect(() => {
-    const receiptPath = sessionStorage.getItem(PUBLIC_ORDER_RECEIPT_REDIRECT_KEY);
-    if (receiptPath?.startsWith("/receipt/") && window.location.pathname !== receiptPath) {
+    const receiptPath = readPendingReceiptRedirect();
+    if (receiptPath && window.location.pathname !== receiptPath) {
       window.location.replace(receiptPath);
     }
   }, []);
@@ -117,10 +117,11 @@ export default function PublicPaymentPage() {
           })),
         }),
       });
-      const payload = await readApiResponse<{ order?: { id: string }; duplicate?: boolean }>(response);
-      if (!payload.order) throw new Error("Unable to place order");
-      const receiptPath = `/receipt/${payload.order.id}`;
-      sessionStorage.setItem(PUBLIC_ORDER_RECEIPT_REDIRECT_KEY, receiptPath);
+      const payload = await readApiResponse<{ order?: { id: string; receipt_token?: string }; duplicate?: boolean; receiptToken?: string }>(response);
+      const receiptToken = payload.receiptToken ?? payload.order?.receipt_token;
+      if (!payload.order || !receiptToken) throw new Error("Unable to place order");
+      const receiptPath = publicReceiptPath(payload.order.id, receiptToken);
+      persistReceiptRedirect(receiptPath);
       cart.clear();
       toast.success(payload.duplicate ? "Order already received. Opening receipt." : "Order sent to the kitchen.");
       redirecting = true;

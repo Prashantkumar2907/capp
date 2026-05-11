@@ -21,6 +21,14 @@ import { useAuth } from "@/features/auth/auth-provider";
 import type { CartItem } from "@/stores/cart-store";
 import type { RestaurantTable } from "@/types/database";
 
+type WaiterDraft = {
+  customerName: string;
+  items: CartItem[];
+  notes: string;
+  tableNumber: number | null;
+  version: 1;
+};
+
 export default function WaiterPage() {
   const { organization, branch } = useAuth();
   const [supabase] = useState(() => createClient());
@@ -33,6 +41,8 @@ export default function WaiterPage() {
   const [items, setItems] = useState<CartItem[]>([]);
   const requestIdRef = useRef<string | null>(null);
   const submittingRef = useRef(false);
+  const draftHydratedRef = useRef(false);
+  const draftKey = branch?.id ? `capp-waiter-draft:${branch.id}` : null;
 
   const menu = useQuery({
     queryKey: ["menu", organization?.id],
@@ -66,6 +76,38 @@ export default function WaiterPage() {
     requestIdRef.current = null;
   }, [branch?.id, items, tableNumber]);
 
+  useEffect(() => {
+    draftHydratedRef.current = false;
+    if (!draftKey) return;
+
+    const draft = readWaiterDraft(draftKey);
+    setCustomerName(draft?.customerName ?? "");
+    setNotes(draft?.notes ?? "");
+    setTableNumber(draft?.tableNumber ?? null);
+    setItems(draft?.items ?? []);
+    requestIdRef.current = null;
+    draftHydratedRef.current = true;
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (!draftKey || !draftHydratedRef.current) return;
+
+    const hasDraft = items.length || customerName.trim() || notes.trim() || tableNumber;
+    if (!hasDraft) {
+      clearWaiterDraft(draftKey);
+      return;
+    }
+
+    const draft: WaiterDraft = {
+      version: 1,
+      customerName,
+      notes,
+      tableNumber,
+      items,
+    };
+    writeWaiterDraft(draftKey, draft);
+  }, [customerName, draftKey, items, notes, tableNumber]);
+
   const createOrder = useMutation({
     mutationFn: async () => {
       requestIdRef.current ??= `waiter:${branch!.id}:${crypto.randomUUID()}`;
@@ -95,6 +137,7 @@ export default function WaiterPage() {
       setItems([]);
       setCustomerName("");
       setNotes("");
+      if (draftKey) clearWaiterDraft(draftKey);
       requestIdRef.current = null;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] }),
@@ -204,8 +247,9 @@ export default function WaiterPage() {
         </section>
         <aside className="space-y-3">
           <div className="space-y-3 rounded-2xl border bg-card p-4">
-            <Input placeholder="Customer name optional" value={customerName} maxLength={80} onChange={(event) => setCustomerName(event.target.value)} />
-            <Textarea placeholder="Order notes for kitchen" value={notes} maxLength={500} onChange={(event) => setNotes(event.target.value)} />
+            <Input aria-label="Customer name optional" placeholder="Customer name optional" value={customerName} maxLength={80} onChange={(event) => setCustomerName(event.target.value)} />
+            <Textarea aria-label="Order notes for kitchen" placeholder="Order notes for kitchen" value={notes} maxLength={500} onChange={(event) => setNotes(event.target.value)} />
+            {items.length ? <p className="text-xs text-muted-foreground">Draft saved on this device for this branch.</p> : null}
           </div>
           <CartPanel
             items={items}
@@ -232,4 +276,39 @@ function tableCounts(tables: RestaurantTable[]) {
     available: tables.filter((table) => table.status === "available").length,
     occupied: tables.filter((table) => table.status === "occupied").length,
   };
+}
+
+function readWaiterDraft(key: string): WaiterDraft | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<WaiterDraft>;
+    if (parsed.version !== 1 || !Array.isArray(parsed.items)) return null;
+
+    return {
+      version: 1,
+      customerName: typeof parsed.customerName === "string" ? parsed.customerName : "",
+      notes: typeof parsed.notes === "string" ? parsed.notes : "",
+      tableNumber: typeof parsed.tableNumber === "number" ? parsed.tableNumber : null,
+      items: parsed.items.filter((item): item is CartItem => Boolean(item?.dish_id && item.dish_name && item.quantity)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeWaiterDraft(key: string, draft: WaiterDraft) {
+  try {
+    localStorage.setItem(key, JSON.stringify(draft));
+  } catch {
+    // Draft persistence is a convenience; blocked storage should not interrupt POS work.
+  }
+}
+
+function clearWaiterDraft(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Ignore storage failures in private or locked-down browser contexts.
+  }
 }

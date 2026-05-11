@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createOrderSchema } from "../../src/lib/validation/schemas";
+import { createOrderSchema, publicReceiptQuerySchema } from "../../src/lib/validation/schemas";
 
 test("createOrderSchema strips client-supplied dish names and prices", () => {
   const payload = createOrderSchema.parse({
@@ -65,4 +65,24 @@ test("createOrderSchema strips client-supplied waiter identity", () => {
 
   assert.equal("waiterId" in payload, false);
   assert.equal(payload.clientRequestId?.startsWith("waiter:"), true);
+});
+
+test("publicReceiptQuerySchema requires a bounded secure receipt token", () => {
+  const parsed = publicReceiptQuerySchema.parse({
+    orderId: "f0000000-0000-0000-0000-000000000099",
+    token: "receipt_token_123456789012",
+  });
+
+  assert.equal(parsed.token, "receipt_token_123456789012");
+
+  const missing = publicReceiptQuerySchema.safeParse({
+    orderId: "f0000000-0000-0000-0000-000000000099",
+  });
+  const unsafe = publicReceiptQuerySchema.safeParse({
+    orderId: "f0000000-0000-0000-0000-000000000099",
+    token: "bad token with spaces",
+  });
+
+  assert.equal(missing.success, false);
+  assert.equal(unsafe.success, false);
 });

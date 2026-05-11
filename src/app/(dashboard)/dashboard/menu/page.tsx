@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Edit2, ImagePlus, Leaf, Plus, Search, Trash2, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
@@ -8,11 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { FormField } from "@/components/ui/form-field";
 import { Pagination } from "@/components/ui/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
@@ -41,6 +41,9 @@ export default function MenuPage() {
   const [dishForm, setDishForm] = useState(emptyDish);
   const [categoryForm, setCategoryForm] = useState(emptyCategory);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const imagePreviewUrlRef = useRef<string | null>(null);
 
   const menu = useQuery({
     queryKey: ["menu", organization?.id],
@@ -58,6 +61,40 @@ export default function MenuPage() {
 
   const pagination = usePagination(dishes, 9);
   const { setPage } = pagination;
+
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current);
+    };
+  }, []);
+
+  const updateImageSelection = (file: File | null, error: string | null = null) => {
+    if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current);
+    const nextPreviewUrl = file ? URL.createObjectURL(file) : null;
+    imagePreviewUrlRef.current = nextPreviewUrl;
+    setImageFile(file);
+    setImagePreviewUrl(nextPreviewUrl);
+    setImageError(error);
+  };
+
+  const chooseImage = (file: File | null | undefined) => {
+    if (!file) {
+      updateImageSelection(null);
+      return;
+    }
+
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      updateImageSelection(null, "Use a JPEG, PNG, or WebP image.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      updateImageSelection(null, "Images must be 5 MB or smaller.");
+      return;
+    }
+
+    updateImageSelection(file);
+  };
 
   const uploadImage = async () => {
     if (!imageFile) return editingDish?.image_url ?? null;
@@ -103,7 +140,7 @@ export default function MenuPage() {
       setDishOpen(false);
       setEditingDish(null);
       setDishForm(emptyDish);
-      setImageFile(null);
+      updateImageSelection(null);
       toast.success("Dish saved");
     },
     onError: (error) => toast.error(error.message),
@@ -111,13 +148,14 @@ export default function MenuPage() {
 
   const saveCategory = useMutation({
     mutationFn: async () => {
-      if (editingCategory) {
-        const { error } = await supabase.from("categories").update(categoryForm).eq("id", editingCategory.id);
-        if (error) throw error;
-        return;
-      }
-      const { error } = await supabase.from("categories").insert({ ...categoryForm, org_id: organization!.id });
-      if (error) throw error;
+      const method = editingCategory ? "PATCH" : "POST";
+      const url = editingCategory ? `/api/menu/categories/${editingCategory.id}` : "/api/menu/categories";
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(categoryForm),
+      });
+      await readApiResponse(response);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["menu"] });
@@ -140,12 +178,13 @@ export default function MenuPage() {
   const editDish = (dish: DishWithRelations) => {
     setEditingDish(dish);
     setDishForm({ name: dish.name, description: dish.description ?? "", price: Number(dish.price), category_id: dish.category_id ?? "", is_veg: dish.is_veg, is_active: dish.is_active, prep_time_mins: dish.prep_time_mins });
+    updateImageSelection(null);
     setDishOpen(true);
   };
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Menu" description={`${menu.data?.dishes.length ?? 0} dishes | ${menu.data?.categories.length ?? 0} categories`} actions={<><Button variant="secondary" onClick={() => setCategoryOpen(true)}><Plus className="h-4 w-4" />Category</Button><Button onClick={() => { setEditingDish(null); setDishForm(emptyDish); setDishOpen(true); }}><Plus className="h-4 w-4" />Dish</Button></>} />
+      <PageHeader title="Menu" description={`${menu.data?.dishes.length ?? 0} dishes | ${menu.data?.categories.length ?? 0} categories`} actions={<><Button variant="secondary" onClick={() => { setEditingCategory(null); setCategoryForm(emptyCategory); setCategoryOpen(true); }}><Plus className="h-4 w-4" />Category</Button><Button onClick={() => { setEditingDish(null); setDishForm(emptyDish); updateImageSelection(null); setDishOpen(true); }}><Plus className="h-4 w-4" />Dish</Button></>} />
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-64 flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -190,7 +229,17 @@ export default function MenuPage() {
                       <span className="font-numbers text-sm font-semibold text-primary">{formatCurrency(dish.price)}</span>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" aria-label={`Edit ${dish.name}`} onClick={() => editDish(dish)}><Edit2 className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" className="text-destructive" aria-label={`Remove ${dish.name}`} onClick={() => removeDish.mutate(dish.id)}><Trash2 className="h-4 w-4" /></Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive"
+                          aria-label={`Remove ${dish.name}`}
+                          onClick={() => {
+                            if (window.confirm(`Remove ${dish.name} from the menu?`)) removeDish.mutate(dish.id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -213,34 +262,36 @@ export default function MenuPage() {
       )}
       <Dialog open={dishOpen} title={editingDish ? "Edit dish" : "Add dish"} onOpenChange={setDishOpen}>
         <div className="space-y-3">
-          <label className="flex items-center gap-3 rounded-2xl border bg-secondary p-3">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-card"><ImagePlus className="h-5 w-5 text-muted-foreground" /></div>
-            <span className="text-sm font-medium">Upload dish image</span>
-            <input type="file" accept="image/*" className="hidden" onChange={(event) => setImageFile(event.target.files?.[0] ?? null)} />
-          </label>
-          <Field label="Name"><Input value={dishForm.name} onChange={(event) => setDishForm({ ...dishForm, name: event.target.value })} /></Field>
-          <Field label="Description"><Textarea value={dishForm.description} onChange={(event) => setDishForm({ ...dishForm, description: event.target.value })} /></Field>
+          <FormField id="dish-image" label="Dish image" error={imageError} hint={imageFile ? `${imageFile.name} selected` : "JPEG, PNG, or WebP up to 5 MB."}>
+            <label className="flex items-center gap-3 rounded-2xl border bg-secondary p-3">
+              <DishImage src={imagePreviewUrl ?? editingDish?.image_url ?? null} alt={dishForm.name || "Dish"} className="h-14 w-14 shrink-0 rounded-2xl" />
+              <span className="inline-flex items-center gap-2 text-sm font-medium">
+                <ImagePlus className="h-4 w-4 text-muted-foreground" />
+                {imageFile ? "Change image" : "Upload dish image"}
+              </span>
+              <input id="dish-image" type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(event) => chooseImage(event.target.files?.[0])} />
+            </label>
+          </FormField>
+          <FormField id="dish-name" label="Name"><Input id="dish-name" value={dishForm.name} onChange={(event) => setDishForm({ ...dishForm, name: event.target.value })} /></FormField>
+          <FormField id="dish-description" label="Description"><Textarea id="dish-description" value={dishForm.description} onChange={(event) => setDishForm({ ...dishForm, description: event.target.value })} /></FormField>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Price"><Input type="number" value={dishForm.price} onChange={(event) => setDishForm({ ...dishForm, price: Number(event.target.value) })} /></Field>
-            <Field label="Prep mins"><Input type="number" value={dishForm.prep_time_mins} onChange={(event) => setDishForm({ ...dishForm, prep_time_mins: Number(event.target.value) })} /></Field>
+            <FormField id="dish-price" label="Price"><Input id="dish-price" type="number" value={dishForm.price} onChange={(event) => setDishForm({ ...dishForm, price: Number(event.target.value) })} /></FormField>
+            <FormField id="dish-prep-mins" label="Prep mins"><Input id="dish-prep-mins" type="number" value={dishForm.prep_time_mins} onChange={(event) => setDishForm({ ...dishForm, prep_time_mins: Number(event.target.value) })} /></FormField>
           </div>
-          <Field label="Category"><Select value={dishForm.category_id} onChange={(event) => setDishForm({ ...dishForm, category_id: event.target.value })}><option value="">Uncategorized</option>{menu.data?.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</Select></Field>
+          <FormField id="dish-category" label="Category"><Select id="dish-category" value={dishForm.category_id} onChange={(event) => setDishForm({ ...dishForm, category_id: event.target.value })}><option value="">Uncategorized</option>{menu.data?.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</Select></FormField>
           <div className="flex items-center justify-between rounded-xl border p-3 text-sm">Vegetarian<Switch checked={dishForm.is_veg} onCheckedChange={(checked) => setDishForm({ ...dishForm, is_veg: checked })} /></div>
           <div className="flex items-center justify-between rounded-xl border p-3 text-sm">Active<Switch checked={dishForm.is_active} onCheckedChange={(checked) => setDishForm({ ...dishForm, is_active: checked })} /></div>
-          <Button className="w-full" disabled={!dishForm.name || saveDish.isPending} onClick={() => saveDish.mutate()}>Save dish</Button>
+          <Button className="w-full" loading={saveDish.isPending} disabled={!dishForm.name || Boolean(imageError)} onClick={() => saveDish.mutate()}>Save dish</Button>
         </div>
       </Dialog>
       <Dialog open={categoryOpen} title={editingCategory ? "Edit category" : "Add category"} onOpenChange={setCategoryOpen}>
         <div className="space-y-3">
-          <Field label="Name"><Input value={categoryForm.name} onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })} /></Field>
-          <Field label="Sort order"><Input type="number" value={categoryForm.sort_order} onChange={(event) => setCategoryForm({ ...categoryForm, sort_order: Number(event.target.value) })} /></Field>
-          <Button className="w-full" disabled={!categoryForm.name || saveCategory.isPending} onClick={() => saveCategory.mutate()}>Save category</Button>
+          <FormField id="category-name" label="Name"><Input id="category-name" value={categoryForm.name} onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })} /></FormField>
+          <FormField id="category-sort-order" label="Sort order"><Input id="category-sort-order" type="number" value={categoryForm.sort_order} onChange={(event) => setCategoryForm({ ...categoryForm, sort_order: Number(event.target.value) })} /></FormField>
+          <div className="flex items-center justify-between rounded-xl border p-3 text-sm">Active<Switch checked={categoryForm.is_active} onCheckedChange={(checked) => setCategoryForm({ ...categoryForm, is_active: checked })} /></div>
+          <Button className="w-full" loading={saveCategory.isPending} disabled={!categoryForm.name} onClick={() => saveCategory.mutate()}>Save category</Button>
         </div>
       </Dialog>
     </div>
   );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="space-y-1.5"><Label>{label}</Label>{children}</div>;
 }

@@ -127,6 +127,7 @@ create table orders (
   customer_name text,
   customer_phone text,
   client_request_id text,
+  receipt_token text not null default encode(gen_random_bytes(16), 'hex'),
   waiter_id uuid references staff(id) on delete set null,
   order_type text not null default 'dine_in' check (order_type in ('dine_in','takeaway','delivery')),
   order_source text not null default 'waiter' check (order_source in ('waiter','qr_customer','cashier')),
@@ -250,6 +251,7 @@ create index idx_orders_created on orders(created_at desc);
 create index idx_orders_branch_created on orders(branch_id, created_at desc);
 create index idx_orders_branch_table_active on orders(branch_id, table_number) where table_number is not null and status in ('pending','confirmed','preparing','ready','served');
 create unique index idx_orders_branch_client_request on orders(branch_id, client_request_id) where client_request_id is not null;
+create unique index idx_orders_receipt_token on orders(receipt_token);
 create index idx_order_items_order on order_items(order_id);
 create index idx_order_items_branch on order_items(branch_id);
 create index idx_order_items_branch_created on order_items(branch_id, created_at desc);

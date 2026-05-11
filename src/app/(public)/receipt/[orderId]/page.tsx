@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Clock, ExternalLink, ReceiptText, Star, Table2 } from "lucide-react";
 import { toast } from "sonner";
@@ -13,30 +13,32 @@ import { ReceiptSkeleton } from "@/components/ui/loading-patterns";
 import { OrderStatusBadge } from "@/components/shared/status-badge";
 import { AppToaster } from "@/components/shared/app-toaster";
 import { readApiResponse } from "@/lib/api/client";
-import { PUBLIC_ORDER_RECEIPT_REDIRECT_KEY } from "@/lib/public-order";
+import { clearReceiptRedirect } from "@/lib/public-order";
 import { formatCurrency, formatDateTime, upiLink } from "@/lib/utils";
 import type { PublicReceiptOrder } from "@/lib/supabase/public";
 
 export default function ReceiptPage() {
   const params = useParams<{ orderId: string }>();
+  const searchParams = useSearchParams();
   const orderId = safeParam(params.orderId);
+  const receiptToken = searchParams.get("token") ?? "";
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
 
   useEffect(() => {
-    sessionStorage.removeItem(PUBLIC_ORDER_RECEIPT_REDIRECT_KEY);
+    clearReceiptRedirect();
   }, []);
 
   const receipt = useQuery({
-    queryKey: ["receipt", orderId],
+    queryKey: ["receipt", orderId, receiptToken],
     queryFn: async () => {
-      const response = await fetch(`/api/public/receipt?orderId=${orderId}`);
+      const response = await fetch(`/api/public/receipt?orderId=${orderId}&token=${encodeURIComponent(receiptToken)}`);
       const payload = (await response.json()) as { error?: string; order?: PublicReceiptOrder };
       if (!response.ok || !payload.order) throw new Error(payload.error ?? "Receipt not found");
       return payload.order;
     },
-    enabled: !!orderId,
-    refetchInterval: 15000,
+    enabled: !!orderId && !!receiptToken,
+    refetchInterval: (query) => (isReceiptTerminal(query.state.data) ? false : 15000),
     retry: false,
   });
 
@@ -50,6 +52,7 @@ export default function ReceiptPage() {
         body: JSON.stringify({
           orderId: order.id,
           branchId: order.branch_id,
+          token: receiptToken,
           rating,
           comment: comment || undefined,
         }),
@@ -60,22 +63,16 @@ export default function ReceiptPage() {
     onError: (error) => toast.error(error.message),
   });
 
+  if (!receiptToken) {
+    return <ReceiptError message="This receipt link is missing its secure access token." />;
+  }
+
   if (receipt.isLoading) {
     return <ReceiptSkeleton />;
   }
 
   if (receipt.error || !receipt.data) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-background p-4">
-        <Card className="max-w-md">
-          <CardContent className="p-6 text-center">
-            <ReceiptText className="mx-auto h-10 w-10 text-muted-foreground" />
-            <h1 className="mt-3 text-lg font-semibold">Receipt not found</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{receipt.error?.message ?? "This order could not be loaded."}</p>
-          </CardContent>
-        </Card>
-      </main>
-    );
+    return <ReceiptError message={receipt.error?.message ?? "This order could not be loaded."} />;
   }
 
   const order = receipt.data;
@@ -196,6 +193,26 @@ function Line({ label, value, strong }: { label: string; value: string; strong?:
       <span className="font-numbers text-foreground">{value}</span>
     </div>
   );
+}
+
+function ReceiptError({ message }: { message: string }) {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-background p-4">
+      <Card className="max-w-md">
+        <CardContent className="p-6 text-center">
+          <ReceiptText className="mx-auto h-10 w-10 text-muted-foreground" />
+          <h1 className="mt-3 text-lg font-semibold">Receipt not found</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{message}</p>
+        </CardContent>
+      </Card>
+    </main>
+  );
+}
+
+function isReceiptTerminal(order: PublicReceiptOrder | undefined) {
+  if (!order) return false;
+  const payment = order.payments[0];
+  return ["served", "paid", "cancelled", "refunded", "failed"].includes(order.status) && (!payment || payment.status !== "pending");
 }
 
 function safeParam(value: string | string[] | undefined) {

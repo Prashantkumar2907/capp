@@ -56,6 +56,10 @@ export const categorySchema = z.object({
   is_active: z.boolean(),
 });
 
+export const categoryUpdateSchema = categorySchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, "At least one category field is required");
+
 export const dishSchema = z.object({
   name: z.string().min(2).max(120),
   description: z.string().max(500).optional(),
@@ -123,11 +127,13 @@ export const publicMenuQuerySchema = z.object({
 
 export const publicReceiptQuerySchema = z.object({
   orderId: dbUuidSchema,
+  token: z.string().trim().min(24).max(96).regex(/^[a-z0-9_-]+$/i, "Invalid receipt token"),
 });
 
 export const publicFeedbackSchema = feedbackSchema.extend({
   orderId: dbUuidSchema,
   branchId: dbUuidSchema,
+  token: z.string().trim().min(24).max(96).regex(/^[a-z0-9_-]+$/i, "Invalid receipt token"),
 });
 
 export const createOrderSchema = z.object({
@@ -165,6 +171,8 @@ export type StaffInput = z.infer<typeof staffSchema>;
 export type StaffUpdateInput = z.infer<typeof staffUpdateSchema>;
 export type DishInput = z.infer<typeof dishSchema>;
 export type DishUpdateInput = z.infer<typeof dishUpdateSchema>;
+export type CategoryInput = z.infer<typeof categorySchema>;
+export type CategoryUpdateInput = z.infer<typeof categoryUpdateSchema>;
 export type TableCreateInput = z.infer<typeof tableCreateSchema>;
 export type TableStatusUpdateInput = z.infer<typeof tableStatusUpdateSchema>;
 export type OnboardingInput = z.infer<typeof onboardingSchema>;

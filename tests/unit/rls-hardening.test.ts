@@ -22,7 +22,7 @@ test("anonymous clients cannot directly read or write order/payment tables", () 
 });
 
 test("security-definer RLS helpers pin their search path", () => {
-  ["app_user_org_id", "app_user_branch_id", "app_user_role", "app_branch_org_id", "app_user_can_manage_branch"].forEach((name) => {
+  ["app_user_org_id", "app_user_branch_id", "app_user_role", "app_branch_org_id", "app_user_can_manage_branch", "create_order_with_items"].forEach((name) => {
     const start = functions.indexOf(`create or replace function ${name}`);
     assert.notEqual(start, -1, `${name} should exist`);
     const nextFunction = functions.indexOf("create or replace function", start + 1);
@@ -30,6 +30,11 @@ test("security-definer RLS helpers pin their search path", () => {
     assert.match(source, /security definer/);
     assert.match(source, /set search_path = public, auth/);
   });
+});
+
+test("trusted order creation RPC is not executable by browser roles", () => {
+  assert.match(functions, /revoke all on function create_order_with_items[\s\S]*from public/);
+  assert.match(functions, /grant execute on function create_order_with_items[\s\S]*to service_role/);
 });
 
 test("dish image writes are limited to menu-management roles", () => {

@@ -157,7 +157,7 @@ async function getPublicTableWithClient(admin: AdminSupabaseClient, input: Publi
   return { ok: true, data: { table: table as PublicMenuTable } };
 }
 
-export async function getPublicReceipt(orderId: string): Promise<PublicResult<{ order: PublicReceiptOrder }>> {
+export async function getPublicReceipt(orderId: string, receiptToken: string): Promise<PublicResult<{ order: PublicReceiptOrder }>> {
   const admin = createAdminSupabase();
   const { data: order, error } = await admin
     .from("orders")
@@ -165,6 +165,7 @@ export async function getPublicReceipt(orderId: string): Promise<PublicResult<{ 
       "id, order_number, branch_id, table_number, status, subtotal, tax, discount, total, created_at, order_items(id, dish_name, quantity, price_at_order, notes), payments(id, amount, method, status), branches(id, name, upi_vpa, organizations(name, default_tax_percent, tax_inclusive))"
     )
     .eq("id", orderId)
+    .eq("receipt_token", receiptToken)
     .single();
 
   if (error || !order) {
@@ -181,6 +182,7 @@ export async function createPublicFeedback(input: PublicFeedbackInput): Promise<
     .select("id, branch_id")
     .eq("id", input.orderId)
     .eq("branch_id", input.branchId)
+    .eq("receipt_token", input.token)
     .maybeSingle();
 
   if (orderError) return failure(400, "ORDER_LOOKUP_FAILED", "Unable to verify receipt");

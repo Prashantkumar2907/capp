@@ -143,6 +143,27 @@ export interface Database {
       app_user_org_id: { Args: Record<string, never>; Returns: string | null };
       app_user_role: { Args: Record<string, never>; Returns: string | null };
       app_user_branch_id: { Args: Record<string, never>; Returns: string | null };
+      create_order_with_items: {
+        Args: {
+          p_order_number: string;
+          p_branch_id: string;
+          p_table_number: number | null;
+          p_customer_name: string | null;
+          p_customer_phone: string | null;
+          p_client_request_id: string | null;
+          p_receipt_token: string;
+          p_waiter_id: string | null;
+          p_order_type: Order["order_type"];
+          p_order_source: Order["order_source"];
+          p_subtotal: number;
+          p_tax: number;
+          p_discount: number;
+          p_total: number;
+          p_notes: string | null;
+          p_items: Json;
+        };
+        Returns: Order;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
@@ -259,6 +280,7 @@ export type Order = {
   customer_name: string | null;
   customer_phone: string | null;
   client_request_id: string | null;
+  receipt_token: string;
   waiter_id: string | null;
   order_type: "dine_in" | "takeaway" | "delivery";
   order_source: "waiter" | "qr_customer" | "cashier";

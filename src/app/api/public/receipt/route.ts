@@ -20,11 +20,12 @@ const publicReceiptCache = new Map<string, CacheEntry<PublicReceiptResult>>();
 export async function GET(request: NextRequest) {
   const parsed = publicReceiptQuerySchema.safeParse({
     orderId: request.nextUrl.searchParams.get("orderId"),
+    token: request.nextUrl.searchParams.get("token"),
   });
 
   if (!parsed.success) return apiValidationError(parsed.error);
 
-  const result = await getCachedPublicReceipt(parsed.data.orderId);
+  const result = await getCachedPublicReceipt(parsed.data.orderId, parsed.data.token);
   if (!result.ok) return apiError(result.code, result.message, result.status);
 
   return apiOk(
@@ -37,8 +38,8 @@ export async function GET(request: NextRequest) {
   );
 }
 
-function getCachedPublicReceipt(orderId: string) {
-  return getCached(publicReceiptCache, orderId, () => getPublicReceipt(orderId));
+function getCachedPublicReceipt(orderId: string, receiptToken: string) {
+  return getCached(publicReceiptCache, `${orderId}:${receiptToken}`, () => getPublicReceipt(orderId, receiptToken));
 }
 
 function getCached<T extends { ok: boolean }>(cache: Map<string, CacheEntry<T>>, key: string, load: () => Promise<T>) {

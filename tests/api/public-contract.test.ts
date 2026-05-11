@@ -17,7 +17,7 @@ test("public menu rejects malformed branch ids before database work", async () =
 
 test("public receipt rejects malformed order ids before database work", async () => {
   const { GET } = await import("../../src/app/api/public/receipt/route");
-  const request = { nextUrl: new URL("http://localhost/api/public/receipt?orderId=bad") } as NextRequest;
+  const request = { nextUrl: new URL("http://localhost/api/public/receipt?orderId=bad&token=receipt_token_123456789012") } as NextRequest;
 
   const response = await GET(request);
   const body = (await response.json()) as { ok: boolean; code?: string; error?: string };
@@ -26,6 +26,19 @@ test("public receipt rejects malformed order ids before database work", async ()
   assert.equal(body.ok, false);
   assert.equal(body.code, "VALIDATION_ERROR");
   assert.match(body.error ?? "", /orderId/i);
+});
+
+test("public receipt requires a secure token before database work", async () => {
+  const { GET } = await import("../../src/app/api/public/receipt/route");
+  const request = { nextUrl: new URL("http://localhost/api/public/receipt?orderId=f0000000-0000-0000-0000-000000000099") } as NextRequest;
+
+  const response = await GET(request);
+  const body = (await response.json()) as { ok: boolean; code?: string; error?: string };
+
+  assert.equal(response.status, 400);
+  assert.equal(body.ok, false);
+  assert.equal(body.code, "VALIDATION_ERROR");
+  assert.match(body.error ?? "", /token/i);
 });
 
 test("public menu metadata rejects malformed branch ids before database work", async () => {
@@ -49,6 +62,7 @@ test("public feedback rejects invalid input before database work", async () => {
     body: JSON.stringify({
       orderId: "not-a-uuid",
       branchId: "also-not-a-uuid",
+      token: "bad token with spaces",
       rating: 6,
       comment: "x".repeat(700),
     }),

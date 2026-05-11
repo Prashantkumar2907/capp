@@ -2,7 +2,7 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { calculateTotals, orderNumber } from "@/lib/utils";
 import type { CreateOrderInput } from "@/lib/validation/schemas";
-import type { Branch, Dish, Order, Staff } from "@/types/database";
+import type { Branch, Dish, Json, Order, Staff } from "@/types/database";
 
 export type CreateOrderResult =
   | { ok: true; order: Order; duplicate: boolean }
@@ -98,28 +98,25 @@ export async function createRestaurantOrder(input: CreateOrderInput): Promise<Cr
   const org = branchWithOrg.organizations;
   const totals = calculateTotals(subtotal, Number(org?.default_tax_percent ?? 5), Boolean(org?.tax_inclusive ?? true));
   const number = orderNumber();
-
-  const { data: order, error: orderError } = await admin
-    .from("orders")
-    .insert({
-      order_number: number,
-      branch_id: input.branchId,
-      table_number: input.tableNumber ?? null,
-      customer_name: input.customerName || null,
-      customer_phone: input.customerPhone || null,
-      client_request_id: input.clientRequestId ?? null,
-      waiter_id: actor.staffId,
-      order_type: input.orderType,
-      order_source: input.orderSource,
-      status: "pending",
-      subtotal: totals.subtotal,
-      tax: totals.tax,
-      discount: totals.discount,
-      total: totals.total,
-      notes: input.notes || null,
-    })
-    .select("*")
-    .single();
+  const receiptToken = crypto.randomUUID().replaceAll("-", "");
+  const { data: order, error: orderError } = await admin.rpc("create_order_with_items", {
+    p_order_number: number,
+    p_branch_id: input.branchId,
+    p_table_number: input.tableNumber ?? null,
+    p_customer_name: input.customerName || null,
+    p_customer_phone: input.customerPhone || null,
+    p_client_request_id: input.clientRequestId ?? null,
+    p_receipt_token: receiptToken,
+    p_waiter_id: actor.staffId,
+    p_order_type: input.orderType,
+    p_order_source: input.orderSource,
+    p_subtotal: totals.subtotal,
+    p_tax: totals.tax,
+    p_discount: totals.discount,
+    p_total: totals.total,
+    p_notes: input.notes || null,
+    p_items: normalizedItems as unknown as Json,
+  });
 
   if (orderError || !order) {
     if (input.clientRequestId && orderError?.code === "23505") {
@@ -127,41 +124,6 @@ export async function createRestaurantOrder(input: CreateOrderInput): Promise<Cr
       if (existingOrder) return { ok: true, order: existingOrder, duplicate: true };
     }
     return failure(400, "ORDER_CREATE_FAILED", "Unable to create order");
-  }
-
-  const { error: itemsError } = await admin.from("order_items").insert(
-    normalizedItems.map((item) => ({
-      order_id: order.id,
-      branch_id: input.branchId,
-      dish_id: item.dish_id,
-      dish_name: item.dish_name,
-      quantity: item.quantity,
-      price_at_order: item.price_at_order,
-      notes: item.notes,
-      status: "pending" as const,
-    }))
-  );
-
-  if (itemsError) {
-    await admin.from("orders").delete().eq("id", order.id);
-    return failure(400, "ORDER_ITEMS_CREATE_FAILED", "Unable to add order items");
-  }
-
-  const { error: paymentError } = await admin.from("payments").insert({
-    order_id: order.id,
-    branch_id: input.branchId,
-    amount: totals.total,
-    method: "upi",
-    status: "pending",
-  });
-
-  if (paymentError) {
-    await admin.from("orders").delete().eq("id", order.id);
-    return failure(400, "PAYMENT_CREATE_FAILED", "Unable to prepare payment");
-  }
-
-  if (input.tableNumber) {
-    await admin.from("tables").update({ status: "occupied" }).eq("branch_id", input.branchId).eq("table_number", input.tableNumber);
   }
 
   return { ok: true, order, duplicate: false };

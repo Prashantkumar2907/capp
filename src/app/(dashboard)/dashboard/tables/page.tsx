@@ -10,9 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FormField } from "@/components/ui/form-field";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { readApiResponse } from "@/lib/api/client";
@@ -84,6 +84,18 @@ export default function TablesPage() {
   }, [tables.data]);
 
   const urlFor = (tableNumber: number) => `${clientEnv.appUrl}/order/${branch?.id}/${tableNumber}`;
+  const downloadQr = (table: RestaurantTable) => {
+    const svg = document.getElementById(`table-${table.id}-qr`);
+    if (!svg) return;
+
+    const blob = new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `table-${table.table_number}-qr.svg`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-5">
@@ -108,7 +120,15 @@ export default function TablesPage() {
                   <Badge variant={table.status === "available" ? "success" : table.status === "occupied" ? "warning" : "secondary"}>{table.status}</Badge>
                 </div>
                 <div className="mt-4">
-                  <Select value={table.status} disabled={updateStatus.isPending} onChange={(event) => updateStatus.mutate({ table, status: event.target.value as RestaurantTable["status"] })}>
+                  <Select
+                    value={table.status}
+                    disabled={updateStatus.isPending}
+                    onChange={(event) => {
+                      const status = event.target.value as RestaurantTable["status"];
+                      if (status === "inactive" && !window.confirm(`Mark Table ${table.table_number} inactive? Its QR link will no longer work for guests.`)) return;
+                      updateStatus.mutate({ table, status });
+                    }}
+                  >
                     <option value="available">Available</option>
                     <option value="occupied">Occupied</option>
                     <option value="reserved">Reserved</option>
@@ -128,8 +148,8 @@ export default function TablesPage() {
       )}
       <Dialog open={addOpen} title="Add table" onOpenChange={setAddOpen}>
         <div className="space-y-3">
-          <Field label="Label"><Input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} placeholder="Window table" /></Field>
-          <Field label="Capacity"><Input type="number" value={form.capacity} onChange={(event) => setForm({ ...form, capacity: Number(event.target.value) })} /></Field>
+          <FormField id="table-label" label="Label"><Input id="table-label" value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} placeholder="Window table" /></FormField>
+          <FormField id="table-capacity" label="Capacity"><Input id="table-capacity" type="number" value={form.capacity} onChange={(event) => setForm({ ...form, capacity: Number(event.target.value) })} /></FormField>
           <Button className="w-full" onClick={() => add.mutate()} disabled={add.isPending}>Create table</Button>
         </div>
       </Dialog>
@@ -137,17 +157,17 @@ export default function TablesPage() {
         {qrTable ? (
           <div className="space-y-4 text-center">
             <div className="mx-auto w-fit rounded-2xl bg-white p-4">
-              <QRCodeSVG value={urlFor(qrTable.table_number)} size={220} fgColor="#128c7e" includeMargin />
+              <QRCodeSVG id={`table-${qrTable.id}-qr`} value={urlFor(qrTable.table_number)} size={220} fgColor="#128c7e" includeMargin />
             </div>
+            <div className="text-sm font-semibold">{branch?.name ?? "Restaurant"} - Table {qrTable.table_number}</div>
             <p className="break-all text-xs text-muted-foreground">{urlFor(qrTable.table_number)}</p>
-            <Button className="w-full" onClick={() => window.print()}>Print QR</Button>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button variant="secondary" onClick={() => downloadQr(qrTable)}>Download SVG</Button>
+              <Button onClick={() => window.print()}>Print QR</Button>
+            </div>
           </div>
         ) : null}
       </Dialog>
     </div>
   );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="space-y-1.5"><Label>{label}</Label>{children}</div>;
 }

@@ -1,6 +1,6 @@
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { getActiveStaffContext, requireStaffRole } from "@/lib/supabase/permissions";
-import type { DishInput, DishUpdateInput } from "@/lib/validation/schemas";
+import type { CategoryInput, CategoryUpdateInput, DishInput, DishUpdateInput } from "@/lib/validation/schemas";
 import type { Branch, Category, Dish, Staff } from "@/types/database";
 
 type MutationResult<T> = { ok: true; data: T } | { ok: false; status: number; code: string; message: string };
@@ -49,6 +49,50 @@ export async function createDish(input: DishInput): Promise<MutationResult<{ dis
   }
 
   return { ok: true, data: { dish } };
+}
+
+export async function createCategory(input: CategoryInput): Promise<MutationResult<{ category: Category }>> {
+  const admin = createAdminSupabase();
+  const context = await requireMenuContext(admin);
+  if (!context.ok) return context;
+
+  const { data: category, error } = await admin
+    .from("categories")
+    .insert({
+      org_id: context.staff.org_id,
+      name: input.name,
+      sort_order: input.sort_order,
+      is_active: input.is_active,
+    })
+    .select("*")
+    .single();
+
+  if (error || !category) return failure(400, "CATEGORY_CREATE_FAILED", "Unable to create category");
+  return { ok: true, data: { category } };
+}
+
+export async function updateCategory(categoryId: string, input: CategoryUpdateInput): Promise<MutationResult<{ category: Category }>> {
+  const admin = createAdminSupabase();
+  const context = await requireMenuContext(admin);
+  if (!context.ok) return context;
+
+  const { data: existing } = await admin.from("categories").select("*").eq("id", categoryId).eq("org_id", context.staff.org_id).maybeSingle();
+  if (!existing) return failure(404, "CATEGORY_NOT_FOUND", "Category not found");
+
+  const { data: category, error } = await admin
+    .from("categories")
+    .update({
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.sort_order !== undefined ? { sort_order: input.sort_order } : {}),
+      ...(input.is_active !== undefined ? { is_active: input.is_active } : {}),
+    })
+    .eq("id", categoryId)
+    .eq("org_id", context.staff.org_id)
+    .select("*")
+    .single();
+
+  if (error || !category) return failure(400, "CATEGORY_UPDATE_FAILED", "Unable to update category");
+  return { ok: true, data: { category } };
 }
 
 export async function updateDish(dishId: string, input: DishUpdateInput): Promise<MutationResult<{ dish: Dish }>> {
