@@ -29,9 +29,12 @@ export function DishImage({ alt, className, src }: DishImageProps) {
           onError={() => setFailed(true)}
         />
       ) : (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground" role="img" aria-label={`${alt} image unavailable`}>
-          <UtensilsCrossed className="h-7 w-7" aria-hidden="true" />
-          <span className="sr-only">Image unavailable</span>
+        <div
+          className="flex h-full w-full flex-col items-center justify-center gap-1 bg-[linear-gradient(135deg,var(--secondary),var(--muted))] text-muted-foreground"
+          role="img"
+          aria-label={`${alt} dish preview`}
+        >
+          <UtensilsCrossed className="h-7 w-7 text-primary/70" aria-hidden="true" />
         </div>
       )}
     </div>

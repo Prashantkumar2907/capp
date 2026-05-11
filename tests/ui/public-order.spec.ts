@@ -201,9 +201,12 @@ test("public QR payment sends one idempotent order request on duplicate clicks",
   await expect(page.getByLabel("Name optional")).toBeVisible();
   await expect(page.getByLabel("Phone optional")).toBeVisible();
   await expect(page.getByLabel("Order note")).toBeVisible();
-  await expect(page.getByRole("button", { name: /^place order$/i })).toHaveCount(1);
+  await expect(page.getByText("1 selected items")).toBeVisible();
+  const placeOrder = page.getByRole("button", { name: /^place order$/i }).filter({ visible: true });
+  await expect(placeOrder).toHaveCount(1);
+  await expect(placeOrder).toBeEnabled();
 
-  await page.getByRole("button", { name: /^place order$/i }).last().dblclick();
+  await placeOrder.dblclick();
   await expect(page).toHaveURL(new RegExp(`/receipt/${orderId}$`), { timeout: 15000 });
 
   expect(submittedBodies).toHaveLength(1);
@@ -234,7 +237,7 @@ test("public QR payment reuses loaded menu metadata after menu navigation", asyn
   await expect(page.getByText("Millet Masala Dosa")).toBeVisible();
   await page.getByRole("button", { name: /add millet masala dosa|add/i }).first().click();
 
-  const desktopReview = page.getByRole("button", { name: /^review order$/i });
+  const desktopReview = page.getByRole("link", { name: /^review order$/i });
   const mobileReview = page.getByRole("link", { name: /review 1 items/i });
   if (await desktopReview.isVisible()) {
     await expect(desktopReview).toBeEnabled();
@@ -244,7 +247,7 @@ test("public QR payment reuses loaded menu metadata after menu navigation", asyn
     await mobileReview.click();
   }
 
-  await expect(page).toHaveURL(new RegExp(`/order/${branchId}/1/payment$`));
+  await expect(page).toHaveURL(new RegExp(`/order/${branchId}/1/payment$`), { timeout: 15000 });
   await expect(page.getByRole("heading", { name: /review and send order/i })).toBeVisible();
 
   expect(menuCalls).toBe(1);

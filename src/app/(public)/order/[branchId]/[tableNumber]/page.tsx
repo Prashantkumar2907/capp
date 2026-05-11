@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Search, ShoppingBag, Table2, UtensilsCrossed } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +33,6 @@ interface PublicMenu {
 
 export default function PublicOrderPage() {
   const params = useParams<{ branchId: string; tableNumber: string }>();
-  const router = useRouter();
   const branchId = safeParam(params.branchId);
   const tableNumber = Number(safeParam(params.tableNumber));
   const [search, setSearch] = useState("");
@@ -160,6 +159,7 @@ export default function PublicOrderPage() {
             tax={totals.tax}
             total={totals.total}
             submitLabel="Review order"
+            submitHref={`/order/${branchId}/${tableNumber}/payment`}
             loading={!cartReady}
             onIncrement={(dishId) => {
               const dish = menu.data?.dishes.find((item) => item.id === dishId);
@@ -168,7 +168,6 @@ export default function PublicOrderPage() {
             onDecrement={(dishId) => cart.updateQuantity(dishId, (cartItems.find((item) => item.dish_id === dishId)?.quantity ?? 1) - 1)}
             onRemove={cart.removeItem}
             onNotes={cart.updateNotes}
-            onSubmit={() => router.push(`/order/${branchId}/${tableNumber}/payment`)}
           />
         </aside>
       </div>

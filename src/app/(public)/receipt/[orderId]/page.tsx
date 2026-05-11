@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Clock, ExternalLink, ReceiptText, Star, Table2 } from "lucide-react";
@@ -13,6 +13,7 @@ import { ReceiptSkeleton } from "@/components/ui/loading-patterns";
 import { OrderStatusBadge } from "@/components/shared/status-badge";
 import { AppToaster } from "@/components/shared/app-toaster";
 import { readApiResponse } from "@/lib/api/client";
+import { PUBLIC_ORDER_RECEIPT_REDIRECT_KEY } from "@/lib/public-order";
 import { formatCurrency, formatDateTime, upiLink } from "@/lib/utils";
 import type { PublicReceiptOrder } from "@/lib/supabase/public";
 
@@ -21,6 +22,10 @@ export default function ReceiptPage() {
   const orderId = safeParam(params.orderId);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
+
+  useEffect(() => {
+    sessionStorage.removeItem(PUBLIC_ORDER_RECEIPT_REDIRECT_KEY);
+  }, []);
 
   const receipt = useQuery({
     queryKey: ["receipt", orderId],

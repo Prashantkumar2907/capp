@@ -11,7 +11,8 @@ test("dish media uses accessible lazy images with fallback behavior", () => {
   assert.match(dishImage, /loading="lazy"/);
   assert.match(dishImage, /decoding="async"/);
   assert.match(dishImage, /onError=\{\(\) => setFailed\(true\)\}/);
-  assert.match(dishImage, /image unavailable/);
+  assert.match(dishImage, /dish preview/);
+  assert.doesNotMatch(dishImage, /Image unavailable/);
 });
 
 test("menu surfaces share the resilient dish image primitive", () => {

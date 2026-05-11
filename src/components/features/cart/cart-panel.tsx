@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,11 +19,12 @@ interface CartPanelProps {
   submitting?: boolean;
   disabled?: boolean;
   submitClassName?: string;
+  submitHref?: string;
   onIncrement: (dishId: string) => void;
   onDecrement: (dishId: string) => void;
   onRemove: (dishId: string) => void;
   onNotes?: (dishId: string, notes: string) => void;
-  onSubmit: () => void;
+  onSubmit?: () => void;
 }
 
 export function CartPanel({
@@ -35,12 +37,16 @@ export function CartPanel({
   submitting,
   disabled,
   submitClassName,
+  submitHref,
   onIncrement,
   onDecrement,
   onRemove,
   onNotes,
   onSubmit,
 }: CartPanelProps) {
+  const submitDisabled = loading || disabled || !items.length || submitting || (!submitHref && !onSubmit);
+  const submitContent = loading ? "Loading order..." : submitting ? "Working..." : submitLabel;
+
   return (
     <Card className="sticky top-4">
       <CardContent className="space-y-4 p-4">
@@ -139,9 +145,19 @@ export function CartPanel({
             </div>
           ) : null}
         </div>
-        <Button className={cn("w-full", submitClassName)} disabled={loading || disabled || !items.length || submitting} onClick={onSubmit}>
-          {loading ? "Loading order..." : submitting ? "Working..." : submitLabel}
-        </Button>
+        {submitHref && !submitDisabled ? (
+          <Link className={cn(buttonVariants(), "w-full", submitClassName)} href={submitHref}>
+            {submitContent}
+          </Link>
+        ) : submitHref ? (
+          <span className={cn(buttonVariants(), "w-full pointer-events-none opacity-50", submitClassName)} aria-disabled="true">
+            {submitContent}
+          </span>
+        ) : (
+          <Button className={cn("w-full", submitClassName)} disabled={submitDisabled} onClick={onSubmit}>
+            {submitContent}
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CreditCard, Send } from "lucide-react";
 import { toast } from "sonner";
@@ -15,9 +15,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { CartPanel } from "@/components/features/cart/cart-panel";
 import { AppToaster } from "@/components/shared/app-toaster";
 import { readApiResponse } from "@/lib/api/client";
+import { PUBLIC_ORDER_RECEIPT_REDIRECT_KEY } from "@/lib/public-order";
 import { calculateTotals } from "@/lib/utils";
 import { useHasMounted } from "@/hooks/use-has-mounted";
-import { useCartStore } from "@/stores/cart-store";
+import { readStoredCartSnapshot, useCartStore } from "@/stores/cart-store";
 import type { RestaurantTable } from "@/types/database";
 
 interface PublicMenuMeta {
@@ -31,7 +32,6 @@ interface PublicMenuMeta {
 
 export default function PublicPaymentPage() {
   const params = useParams<{ branchId: string; tableNumber: string }>();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const branchId = safeParam(params.branchId);
   const tableNumber = Number(safeParam(params.tableNumber));
@@ -44,6 +44,29 @@ export default function PublicPaymentPage() {
   const hasMounted = useHasMounted();
   const cartReady = hasMounted && cart.hasHydrated;
   const cartItems = cartReady ? cart.items : [];
+
+  useEffect(() => {
+    const receiptPath = sessionStorage.getItem(PUBLIC_ORDER_RECEIPT_REDIRECT_KEY);
+    if (receiptPath?.startsWith("/receipt/") && window.location.pathname !== receiptPath) {
+      window.location.replace(receiptPath);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!cartReady || !branchId || !Number.isInteger(tableNumber)) return;
+
+    if (cart.branchId === branchId && cart.tableNumber === tableNumber) return;
+
+    if (!cart.items.length) {
+      const stored = readStoredCartSnapshot();
+      if (stored?.branchId === branchId && stored.tableNumber === tableNumber && stored.items.length) {
+        cart.restoreCart(stored);
+        return;
+      }
+    }
+
+    cart.setContext(branchId, tableNumber);
+  }, [branchId, cart, cartReady, tableNumber]);
 
   const menuQueryKey = ["public-menu", branchId, tableNumber] as const;
 
@@ -69,9 +92,10 @@ export default function PublicPaymentPage() {
   );
 
   const submitOrder = async () => {
-    if (!cartReady || !cart.items.length || submittingRef.current || meta.isLoading || meta.error) return;
+    if (!cartReady || !cartItems.length || submittingRef.current || meta.isLoading || meta.error) return;
     submittingRef.current = true;
     setSubmitting(true);
+    let redirecting = false;
     try {
       const clientRequestId = cart.ensureSubmissionKey();
       const response = await fetch("/api/orders", {
@@ -86,7 +110,7 @@ export default function PublicPaymentPage() {
           orderSource: "qr_customer",
           orderType: "dine_in",
           notes: notes.trim() || undefined,
-          items: cart.items.map((item) => ({
+          items: cartItems.map((item) => ({
             dish_id: item.dish_id,
             quantity: item.quantity,
             notes: item.notes,
@@ -95,14 +119,22 @@ export default function PublicPaymentPage() {
       });
       const payload = await readApiResponse<{ order?: { id: string }; duplicate?: boolean }>(response);
       if (!payload.order) throw new Error("Unable to place order");
+      const receiptPath = `/receipt/${payload.order.id}`;
+      sessionStorage.setItem(PUBLIC_ORDER_RECEIPT_REDIRECT_KEY, receiptPath);
       cart.clear();
       toast.success(payload.duplicate ? "Order already received. Opening receipt." : "Order sent to the kitchen.");
-      router.replace(`/receipt/${payload.order.id}`);
+      redirecting = true;
+      window.setTimeout(() => {
+        if (window.location.pathname !== receiptPath) window.location.assign(receiptPath);
+      }, 100);
+      window.location.replace(receiptPath);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to place order");
     } finally {
-      submittingRef.current = false;
-      setSubmitting(false);
+      if (!redirecting) {
+        submittingRef.current = false;
+        setSubmitting(false);
+      }
     }
   };
 

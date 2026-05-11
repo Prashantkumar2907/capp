@@ -1,5 +1,6 @@
-const CACHE_NAME = "capp-pwa-v1";
-const APP_SHELL = ["/", "/sign-in", "/offline.html", "/icons/capp-icon.svg", "/icons/capp-maskable.svg"];
+const CACHE_NAME = "capp-pwa-v2";
+const APP_SHELL = ["/offline.html", "/icons/capp-icon.svg", "/icons/capp-maskable.svg"];
+const APP_SHELL_SET = new Set(APP_SHELL);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -24,12 +25,22 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return;
+  if (
+    url.origin !== self.location.origin ||
+    url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/_next/") ||
+    url.pathname === "/sw.js" ||
+    url.pathname === "/manifest.webmanifest"
+  ) {
+    return;
+  }
 
   if (request.mode === "navigate") {
     event.respondWith(fetch(request).catch(() => caches.match("/offline.html")));
     return;
   }
+
+  if (!APP_SHELL_SET.has(url.pathname)) return;
 
   event.respondWith(
     caches.match(request).then((cached) => {

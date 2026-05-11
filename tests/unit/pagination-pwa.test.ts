@@ -70,10 +70,15 @@ test("pwa manifest, service worker, and install prompt are wired into the shell"
   assert.match(prompt, /iphone\|ipad\|ipod/i);
   assert.match(prompt, /Add to Home Screen/);
   assert.match(prompt, /!navigator\.webdriver/);
+  assert.match(prompt, /process\.env\.NODE_ENV !== "production"/);
+  assert.match(prompt, /getRegistrations/);
+  assert.match(prompt, /caches\s*\.\s*keys/);
   assert.match(prompt, /navigator\.serviceWorker\.register\("\/sw\.js"\)/);
   assert.match(manifest, /display: "standalone"/);
   assert.match(manifest, /purpose: "maskable"/);
   assert.match(worker, /\/api\//);
+  assert.match(worker, /capp-pwa-v2/);
+  assert.match(worker, /\/_next\//);
   assert.match(worker, /offline\.html/);
   assert.match(proxy, /manifest\.webmanifest/);
   assert.match(proxy, /sw\.js/);

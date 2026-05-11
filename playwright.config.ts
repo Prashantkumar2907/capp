@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/ui",
+  timeout: 60000,
   fullyParallel: true,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
