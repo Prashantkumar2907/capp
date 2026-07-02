@@ -17,6 +17,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Loader2, QrCode, Minus, Plus, Trash2, StickyNote, CheckCircle2, ShoppingBag } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import Link from "next/link";
+import { getBranchOrganization, type BranchWithOrganization } from "@/lib/domain";
+import { getErrorMessage } from "@/lib/errors";
 
 export default function PaymentPage() {
   const params = useParams();
@@ -42,7 +44,7 @@ export default function PaymentPage() {
         .eq("id", branchId)
         .single();
       if (branch) {
-        const org = (branch as any).organizations;
+        const org = getBranchOrganization(branch as BranchWithOrganization);
         setTaxPercent(org?.default_tax_percent ?? 5);
         setTaxInclusive(org?.tax_inclusive ?? true);
       } else {
@@ -67,8 +69,9 @@ export default function PaymentPage() {
         .eq("id", branchId)
         .single();
 
-      const tp = (branch as any)?.organizations?.default_tax_percent || 5;
-      const ti = (branch as any)?.organizations?.tax_inclusive ?? true;
+      const org = getBranchOrganization(branch as BranchWithOrganization);
+      const tp = org?.default_tax_percent || 5;
+      const ti = org?.tax_inclusive ?? true;
       const computedTax = ti ? 0 : Math.round(subtotal * (tp / 100) * 100) / 100;
       const computedTotal = subtotal + computedTax;
 
@@ -105,7 +108,7 @@ export default function PaymentPage() {
       if (branch?.upi_vpa) {
         const link = generateUPILink(
           branch.upi_vpa, computedTotal, orderNumber,
-          (branch as any)?.organizations?.name || "Restaurant"
+          org?.name || "Restaurant"
         );
         setUpiLink(link);
       }
@@ -113,8 +116,8 @@ export default function PaymentPage() {
       clearCart();
       setStep("success");
       toast.success("Order placed successfully!");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to place order");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to place order"));
     } finally {
       setPlacing(false);
     }

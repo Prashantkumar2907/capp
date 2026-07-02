@@ -13,6 +13,7 @@ import {
   Loader2, UtensilsCrossed, ArrowRight, ArrowLeft, Check,
   Building2, MapPin, Store, ChefHat, Sparkles,
 } from "lucide-react";
+import { getErrorMessage } from "@/lib/errors";
 
 const RESTAURANT_TYPES = [
   { value: "casual", label: "Casual Dining", icon: "🍽️" },
@@ -139,8 +140,8 @@ export default function OnboardingPage() {
       toast.success("🎉 Restaurant setup complete!");
       router.push("/dashboard");
       router.refresh();
-    } catch (err: any) {
-      toast.error(err.message || "Setup failed");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Setup failed"));
     } finally {
       setIsLoading(false);
     }

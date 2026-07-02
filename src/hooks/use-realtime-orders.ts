@@ -3,18 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type OrderWithItems = Record<string, any> & {
-  id: string;
-  order_number: string;
-  branch_id: string;
-  table_number?: number;
-  status: string;
-  notes?: string;
-  created_at: string;
-  order_items: Array<Record<string, any>>;
-};
+import type { Order, OrderWithItems } from "@/lib/supabase/types";
 
 export function useRealtimeOrders(branchId: string | undefined) {
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
@@ -36,7 +25,10 @@ export function useRealtimeOrders(branchId: string | undefined) {
   }, [branchId, supabase]);
 
   useEffect(() => {
-    fetchOrders();
+    const timeout = window.setTimeout(() => {
+      void fetchOrders();
+    }, 0);
+    return () => window.clearTimeout(timeout);
   }, [fetchOrders]);
 
   useEffect(() => {
@@ -52,8 +44,7 @@ export function useRealtimeOrders(branchId: string | undefined) {
           table: "orders",
           filter: `branch_id=eq.${branchId}`,
         },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (payload: RealtimePostgresChangesPayload<any>) => {
+        (payload: RealtimePostgresChangesPayload<Order>) => {
           if (payload.eventType === "INSERT") {
             // Fetch full order with items
             supabase
@@ -75,8 +66,9 @@ export function useRealtimeOrders(branchId: string | undefined) {
               )
             );
           } else if (payload.eventType === "DELETE" && payload.old) {
+            const deletedId = (payload.old as Partial<Order>).id;
             setOrders((prev) =>
-              prev.filter((order) => order.id !== (payload.old as any).id)
+              prev.filter((order) => order.id !== deletedId)
             );
           }
         }

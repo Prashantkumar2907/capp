@@ -2,7 +2,8 @@
 
 import { useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
+import type { Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/validations";
@@ -26,11 +27,11 @@ function ResetPasswordForm() {
   const router = useRouter();
   const [supabase] = useState(() => createClient());
 
-  const { register, handleSubmit, formState: { errors }, watch } = useForm<ResetPasswordInput>({
-    resolver: zodResolver(resetPasswordSchema) as any,
+  const { register, handleSubmit, formState: { errors }, control } = useForm<ResetPasswordInput>({
+    resolver: zodResolver(resetPasswordSchema) as Resolver<ResetPasswordInput>,
   });
 
-  const password = watch("password", "");
+  const password = useWatch({ control, name: "password", defaultValue: "" });
   const requirements = [
     { met: password.length >= 6, label: "At least 6 characters" },
     { met: /[A-Z]/.test(password), label: "One uppercase letter" },

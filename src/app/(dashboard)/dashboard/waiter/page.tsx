@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
+import { useSupabase } from "@/hooks/use-supabase";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
-import { formatCurrency, generateOrderNumber, timeAgo } from "@/lib/helpers";
+import { formatCurrency, generateOrderNumber, timeAgo, calculateTax } from "@/lib/helpers";
 import { SectionHeader } from "@/components/common/section-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,11 +16,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { ClipboardList, Plus, Minus, Check, ShoppingBag, Search, Loader2, Clock } from "lucide-react";
+import { getErrorMessage } from "@/lib/errors";
+import type { Dish, OrderItem } from "@/lib/supabase/types";
 
 export default function WaiterPage() {
-  const { branch, staff } = useAuth();
+  const { branch, staff, organization } = useAuth();
   const { orders, refetch } = useRealtimeOrders(branch?.id);
-  const [supabase] = useState(() => createClient());
+  const supabase = useSupabase();
   const [selectedTable, setSelectedTable] = useState<number | null>(null);
   const [orderDialog, setOrderDialog] = useState(false);
   const [cart, setCart] = useState<Record<string, { name: string; qty: number; price: number }>>({});
@@ -53,7 +55,7 @@ export default function WaiterPage() {
     onSuccess: () => { refetch(); toast.success("Marked as served"); },
   });
 
-  const addToCart = (dish: any) => {
+  const addToCart = (dish: Dish) => {
     setCart(prev => ({
       ...prev,
       [dish.id]: prev[dish.id] ? { ...prev[dish.id], qty: prev[dish.id].qty + 1 } : { name: dish.name, qty: 1, price: dish.price },
@@ -76,12 +78,16 @@ export default function WaiterPage() {
     if (!selectedTable || cartCount === 0) return;
     setPlacing(true);
     try {
+      const taxPercent = organization?.default_tax_percent ?? 0;
+      const taxInclusive = organization?.tax_inclusive ?? true;
+      const { subtotal, taxAmount, total } = calculateTax(cartTotal, taxPercent, taxInclusive);
+
       const orderNumber = generateOrderNumber();
       const { data: order, error } = await supabase.from("orders").insert({
         order_number: orderNumber, branch_id: branch!.id,
         table_number: selectedTable, waiter_id: staff!.id,
         order_type: "dine_in", status: "pending",
-        subtotal: cartTotal, tax: 0, total: cartTotal,
+        subtotal, tax: taxAmount, total,
       }).select().single();
       if (error) throw error;
 
@@ -91,10 +97,17 @@ export default function WaiterPage() {
       }));
       await supabase.from("order_items").insert(items);
 
+      // Mark the table as occupied now that an order has been placed.
+      await supabase
+        .from("tables")
+        .update({ status: "occupied" })
+        .eq("branch_id", branch!.id)
+        .eq("table_number", selectedTable);
+
       toast.success(`Order #${orderNumber} placed for Table ${selectedTable}`);
       setCart({}); setOrderDialog(false); setSelectedTable(null); refetch();
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err));
     } finally {
       setPlacing(false);
     }
@@ -150,7 +163,7 @@ export default function WaiterPage() {
                       </div>
                     </div>
                     <div className="space-y-1 mb-2">
-                      {order.order_items?.slice(0, 3).map((item: any) => (
+                      {order.order_items?.slice(0, 3).map((item: OrderItem) => (
                         <p key={item.id} className="text-xs text-muted-foreground"><span className="font-medium text-foreground">{item.quantity}×</span> {item.dish_name}</p>
                       ))}
                     </div>

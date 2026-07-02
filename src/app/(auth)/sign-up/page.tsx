@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
+import type { Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { signUpSchema, type SignUpInput } from "@/lib/validations";
@@ -21,11 +22,11 @@ export default function SignUpPage() {
   const router = useRouter();
   const [supabase] = useState(() => createClient());
 
-  const { register, handleSubmit, formState: { errors }, watch } = useForm<SignUpInput>({
-    resolver: zodResolver(signUpSchema) as any,
+  const { register, handleSubmit, formState: { errors }, control } = useForm<SignUpInput>({
+    resolver: zodResolver(signUpSchema) as Resolver<SignUpInput>,
   });
 
-  const password = watch("password", "");
+  const password = useWatch({ control, name: "password", defaultValue: "" });
   const passwordStrength = getPasswordStrength(password);
 
   const onSubmit = async (data: SignUpInput) => {

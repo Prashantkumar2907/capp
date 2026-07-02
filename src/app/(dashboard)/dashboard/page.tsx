@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabase } from "@/hooks/use-supabase";
 import { formatCurrency, timeAgo } from "@/lib/helpers";
 import { StatCard } from "@/components/common/stat-card";
 import { EmptyState } from "@/components/common/empty-state";
@@ -20,13 +20,13 @@ import {
 } from "recharts";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import type { Order } from "@/lib/supabase/types";
 
 const COLORS = ["#14b8a6", "#0d9488", "#2dd4bf", "#5eead4", "#99f6e4"];
 
 export default function DashboardPage() {
   const { branch, staff, organization } = useAuth();
-  const [supabase] = useState(() => createClient());
+  const supabase = useSupabase();
 
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard", branch?.id],
@@ -197,7 +197,7 @@ export default function DashboardPage() {
                 <XAxis dataKey="day" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `₹${v}`} />
                 <Tooltip
-                  formatter={(v: any) => [`₹${Number(v).toLocaleString("en-IN")}`, "Revenue"]}
+                  formatter={(v: unknown) => [`₹${Number(v).toLocaleString("en-IN")}`, "Revenue"]}
                   contentStyle={{
                     fontSize: 12, borderRadius: 10,
                     background: "var(--popover)", border: "1px solid var(--border)",
@@ -288,7 +288,7 @@ export default function DashboardPage() {
             </div>
             {data?.recentOrders && data.recentOrders.length > 0 ? (
               <div className="space-y-2">
-                {data.recentOrders.map((order: any, i: number) => {
+                {data.recentOrders.map((order: Pick<Order, "id" | "order_number" | "table_number" | "status" | "created_at" | "total">, i: number) => {
                   const statusColors: Record<string, string> = {
                     pending: "border-amber-400/50 text-amber-600 dark:text-amber-400",
                     confirmed: "border-blue-400/50 text-blue-600 dark:text-blue-400",

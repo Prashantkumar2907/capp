@@ -3,13 +3,16 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
-import { useForm } from "react-hook-form";
+import { useSupabase } from "@/hooks/use-supabase";
+import { useForm, useWatch } from "react-hook-form";
+import type { Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { categorySchema, dishSchema, type CategoryInput, type DishInput } from "@/lib/validations";
+import { getDishCategoryName, type DishWithRelations } from "@/lib/domain";
 import { formatCurrency } from "@/lib/helpers";
 import { SectionHeader } from "@/components/common/section-header";
 import { EmptyState } from "@/components/common/empty-state";
+import { VegIndicator } from "@/components/common/veg-indicator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,18 +26,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import {
-  Plus, Pencil, Trash2, Loader2, Leaf, Search, LayoutGrid, List, UtensilsCrossed,
+  Plus, Pencil, Trash2, Loader2, Search, LayoutGrid, List, UtensilsCrossed,
   ImagePlus,
 } from "lucide-react";
 import type { Category } from "@/lib/supabase/types";
 
 export default function MenuPage() {
   const { organization, branch } = useAuth();
-  const [supabase] = useState(() => createClient());
+  const supabase = useSupabase();
   const queryClient = useQueryClient();
   const [catDialogOpen, setCatDialogOpen] = useState(false);
   const [dishDialogOpen, setDishDialogOpen] = useState(false);
-  const [editingDish, setEditingDish] = useState<any | null>(null);
+  const [editingDish, setEditingDish] = useState<DishWithRelations | null>(null);
   const [editingCat, setEditingCat] = useState<Category | null>(null);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -47,7 +50,7 @@ export default function MenuPage() {
     queryKey: ["categories", organization?.id],
     queryFn: async () => {
       const { data } = await supabase.from("categories").select("*").eq("org_id", organization!.id).order("sort_order");
-      return data || [];
+      return (data || []) as Category[];
     },
     enabled: !!organization,
   });
@@ -56,16 +59,18 @@ export default function MenuPage() {
     queryKey: ["dishes", organization?.id],
     queryFn: async () => {
       const { data } = await supabase.from("dishes").select("*, categories(name)").eq("org_id", organization!.id).order("name");
-      return data || [];
+      return (data || []) as DishWithRelations[];
     },
     enabled: !!organization,
   });
 
-  const catForm = useForm({ resolver: zodResolver(categorySchema) as any, defaultValues: { name: "", sort_order: 0, is_active: true } });
-  const dishForm = useForm({ resolver: zodResolver(dishSchema) as any, defaultValues: { name: "", description: "", price: 0, category_id: null, is_veg: false, is_active: true } });
+  const catForm = useForm<CategoryInput>({ resolver: zodResolver(categorySchema) as Resolver<CategoryInput>, defaultValues: { name: "", sort_order: 0, is_active: true } });
+  const dishForm = useForm<DishInput>({ resolver: zodResolver(dishSchema) as Resolver<DishInput>, defaultValues: { name: "", description: "", price: 0, category_id: null, is_veg: false, is_active: true } });
+  const dishIsVeg = useWatch({ control: dishForm.control, name: "is_veg", defaultValue: false });
+  const dishIsActive = useWatch({ control: dishForm.control, name: "is_active", defaultValue: true });
 
   const saveCat = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: CategoryInput) => {
       if (editingCat) {
         const { error } = await supabase.from("categories").update(data).eq("id", editingCat.id);
         if (error) throw error;
@@ -99,8 +104,21 @@ export default function MenuPage() {
     return data.publicUrl;
   };
 
+  const openDishEditor = (dish: DishWithRelations) => {
+    setEditingDish(dish);
+    dishForm.reset({
+      name: dish.name,
+      description: dish.description ?? "",
+      price: Number(dish.price),
+      category_id: dish.category_id,
+      is_veg: dish.is_veg,
+      is_active: dish.is_active,
+    });
+    setDishDialogOpen(true);
+  };
+
   const saveDish = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: DishInput) => {
       let imageUrl = editingDish?.image_url || null;
       if (imageFile) {
         setUploading(true);
@@ -108,8 +126,11 @@ export default function MenuPage() {
         setUploading(false);
       }
 
-      const payload = { ...data, image_url: imageUrl };
-      if (data.category_id === "" || data.category_id === "none") payload.category_id = null;
+      const payload = {
+        ...data,
+        category_id: !data.category_id || data.category_id === "none" ? null : data.category_id,
+        image_url: imageUrl,
+      };
 
       if (editingDish) {
         const { error } = await supabase.from("dishes").update(payload).eq("id", editingDish.id);
@@ -179,7 +200,7 @@ export default function MenuPage() {
             </div>
             <div className="flex gap-1.5">
               {[{ v: "all", l: "All" }, { v: "veg", l: "🟢 Veg" }, { v: "nonveg", l: "🔴 Non-Veg" }].map(f => (
-                <button key={f.v} onClick={() => setFilterVeg(f.v as any)}
+                <button key={f.v} onClick={() => setFilterVeg(f.v as "all" | "veg" | "nonveg")}
                   className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${filterVeg === f.v ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
                   {f.l}
                 </button>
@@ -246,10 +267,10 @@ export default function MenuPage() {
                   </div>
                   <div className="flex items-center gap-6">
                     <label className="flex items-center gap-2 text-xs cursor-pointer">
-                      <Switch checked={dishForm.watch("is_veg")} onCheckedChange={(v) => dishForm.setValue("is_veg", v)} /> Vegetarian
+                      <Switch checked={dishIsVeg} onCheckedChange={(v) => dishForm.setValue("is_veg", v)} /> Vegetarian
                     </label>
                     <label className="flex items-center gap-2 text-xs cursor-pointer">
-                      <Switch checked={dishForm.watch("is_active")} onCheckedChange={(v) => dishForm.setValue("is_active", v)} /> Active
+                      <Switch checked={dishIsActive} onCheckedChange={(v) => dishForm.setValue("is_active", v)} /> Active
                     </label>
                   </div>
                   <Button type="submit" className="w-full h-9 text-xs" disabled={saveDish.isPending || uploading}>
@@ -281,19 +302,15 @@ export default function MenuPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                          {dish.is_veg ? (
-                            <span className="h-3 w-3 rounded-sm border border-green-500 flex items-center justify-center"><span className="h-1.5 w-1.5 rounded-full bg-green-500" /></span>
-                          ) : (
-                            <span className="h-3 w-3 rounded-sm border border-red-500 flex items-center justify-center"><span className="h-1.5 w-1.5 rounded-full bg-red-500" /></span>
-                          )}
+                          <VegIndicator isVeg={dish.is_veg} className="h-3 w-3" />
                           <span className="text-sm font-medium truncate">{dish.name}</span>
                           {!dish.is_active && <Badge variant="secondary" className="text-[9px] h-4">Inactive</Badge>}
                         </div>
-                        <p className="text-[10px] text-muted-foreground truncate">{(dish as any).categories?.name || "Uncategorized"}</p>
+                        <p className="text-[10px] text-muted-foreground truncate">{getDishCategoryName(dish)}</p>
                       </div>
                       <span className="text-sm font-bold text-primary shrink-0">{formatCurrency(dish.price)}</span>
                       <Switch checked={dish.is_active} onCheckedChange={(checked) => toggleDishActive.mutate({ id: dish.id, is_active: checked })} className="shrink-0" />
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { setEditingDish(dish); dishForm.reset(dish); setDishDialogOpen(true); }}>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => openDishEditor(dish)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive" onClick={() => { if (confirm("Delete this dish?")) deleteDish.mutate(dish.id); }}>
@@ -316,11 +333,7 @@ export default function MenuPage() {
                         <UtensilsCrossed className="h-8 w-8 text-muted-foreground" />
                       )}
                       <div className="absolute top-2 left-2">
-                        {dish.is_veg ? (
-                          <span className="h-5 w-5 rounded border border-green-500 bg-white dark:bg-card flex items-center justify-center"><span className="h-2 w-2 rounded-full bg-green-500" /></span>
-                        ) : (
-                          <span className="h-5 w-5 rounded border border-red-500 bg-white dark:bg-card flex items-center justify-center"><span className="h-2 w-2 rounded-full bg-red-500" /></span>
-                        )}
+                        <VegIndicator isVeg={dish.is_veg} className="h-5 w-5 bg-white dark:bg-card" dotClassName="h-2 w-2" />
                       </div>
                       {!dish.is_active && (
                         <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
@@ -330,11 +343,11 @@ export default function MenuPage() {
                     </div>
                     <CardContent className="p-3">
                       <h4 className="text-sm font-medium truncate">{dish.name}</h4>
-                      <p className="text-[10px] text-muted-foreground truncate">{(dish as any).categories?.name || "Uncategorized"}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{getDishCategoryName(dish)}</p>
                       <div className="flex items-center justify-between mt-2">
                         <span className="text-sm font-bold text-primary">{formatCurrency(dish.price)}</span>
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setEditingDish(dish); dishForm.reset(dish); setDishDialogOpen(true); }}><Pencil className="h-3 w-3" /></Button>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openDishEditor(dish)}><Pencil className="h-3 w-3" /></Button>
                           <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => { if (confirm("Delete?")) deleteDish.mutate(dish.id); }}><Trash2 className="h-3 w-3" /></Button>
                         </div>
                       </div>

@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabase } from "@/hooks/use-supabase";
 import { SectionHeader } from "@/components/common/section-header";
 import { EmptyState } from "@/components/common/empty-state";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { Plus, Users, UserPlus, Pencil, Trash2, Loader2, Shield } from "lucide-react";
-import type { Staff } from "@/lib/supabase/types";
+import { getErrorMessage } from "@/lib/errors";
+import type { Staff, StaffRole } from "@/lib/supabase/types";
 
 const ROLES = ["owner", "admin", "manager", "waiter", "kitchen", "cashier"] as const;
 const ROLE_COLORS: Record<string, string> = {
@@ -30,13 +32,14 @@ const ROLE_COLORS: Record<string, string> = {
 
 export default function StaffPage() {
   const { organization, branch, staff: currentStaff } = useAuth();
-  const [supabase] = useState(() => createClient());
+  const supabase = useSupabase();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Staff | null>(null);
-  const [form, setForm] = useState({ full_name: "", email: "", phone: "", role: "waiter" as string });
+  const [form, setForm] = useState({ full_name: "", email: "", phone: "", role: "waiter" as StaffRole });
   const [saving, setSaving] = useState(false);
   const [roleFilter, setRoleFilter] = useState("all");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const { data: staffList, isLoading } = useQuery({
     queryKey: ["staff", organization?.id],
@@ -51,20 +54,20 @@ export default function StaffPage() {
     setSaving(true);
     try {
       if (editing) {
-        const { error } = await supabase.from("staff").update({ full_name: form.full_name, email: form.email, phone: form.phone, role: form.role as any }).eq("id", editing.id);
+        const { error } = await supabase.from("staff").update({ full_name: form.full_name, email: form.email, phone: form.phone, role: form.role }).eq("id", editing.id);
         if (error) throw error;
       } else {
         const { error } = await supabase.from("staff").insert({
           org_id: organization!.id, branch_id: branch?.id || null,
           full_name: form.full_name, email: form.email,
-          phone: form.phone || null, role: form.role as any,
+          phone: form.phone || null, role: form.role,
         });
         if (error) throw error;
       }
       queryClient.invalidateQueries({ queryKey: ["staff"] });
       setDialogOpen(false); setEditing(null);
       toast.success(editing ? "Staff updated" : "Staff invited");
-    } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
+    } catch (err: unknown) { toast.error(getErrorMessage(err)); } finally { setSaving(false); }
   };
 
   const deleteStaff = useMutation({
@@ -124,7 +127,7 @@ export default function StaffPage() {
                   {member.id !== currentStaff?.id && (
                     <div className="flex gap-1">
                       <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { setEditing(member); setForm({ full_name: member.full_name || "", email: member.email || "", phone: member.phone || "", role: member.role }); setDialogOpen(true); }}><Pencil className="h-3.5 w-3.5" /></Button>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive" onClick={() => { if (confirm("Remove this staff member?")) deleteStaff.mutate(member.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive" onClick={() => setConfirmDeleteId(member.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                     </div>
                   )}
                 </CardContent>
@@ -145,7 +148,7 @@ export default function StaffPage() {
             <div className="space-y-1.5"><Label className="text-xs">Phone</Label><Input className="h-9 text-xs" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
             <div className="space-y-1.5">
               <Label className="text-xs">Role</Label>
-              <select className="w-full h-9 text-xs border rounded-md px-2 bg-transparent" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
+              <select className="w-full h-9 text-xs border rounded-md px-2 bg-transparent" value={form.role} onChange={e => setForm({ ...form, role: e.target.value as StaffRole })}>
                 {ROLES.filter(r => r !== "owner").map(r => <option key={r} value={r} className="capitalize">{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
               </select>
             </div>
@@ -155,6 +158,15 @@ export default function StaffPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteId(null); }}
+        title="Remove staff member?"
+        description="This will permanently remove this staff member from your organisation. This action cannot be undone."
+        confirmLabel="Remove"
+        onConfirm={() => { if (confirmDeleteId) deleteStaff.mutate(confirmDeleteId); }}
+      />
     </div>
   );
 }

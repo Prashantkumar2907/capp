@@ -3,13 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Staff = Record<string, any> & { id: string; full_name: string; role: string; org_id: string; branch_id?: string; is_active: boolean };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Organization = Record<string, any> & { id: string; name: string };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Branch = Record<string, any> & { id: string; name: string; org_id: string };
+import type { Branch, Organization, Staff } from "@/lib/supabase/types";
 
 interface AuthState {
   user: User | null;
@@ -52,9 +46,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    const branchPromise = staffData.branch_id
+      ? supabase.from("branches").select("*").eq("id", staffData.branch_id).single()
+      : Promise.resolve({ data: null });
+
     const [{ data: orgData }, { data: branchData }] = await Promise.all([
       supabase.from("organizations").select("*").eq("id", staffData.org_id).single(),
-      supabase.from("branches").select("*").eq("id", staffData.branch_id).single(),
+      branchPromise,
     ]);
 
     setState((prev) => ({

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabase } from "@/hooks/use-supabase";
 import { formatCurrency } from "@/lib/helpers";
 import { SectionHeader } from "@/components/common/section-header";
 import { StatCard } from "@/components/common/stat-card";
@@ -29,7 +29,7 @@ const PERIODS = [
 
 export default function AnalyticsPage() {
   const { branch } = useAuth();
-  const [supabase] = useState(() => createClient());
+  const supabase = useSupabase();
   const [period, setPeriod] = useState(7);
 
   const { data, isLoading } = useQuery({
@@ -127,7 +127,7 @@ export default function AnalyticsPage() {
                   <defs><linearGradient id="rev" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#14b8a6" stopOpacity={0.2} /><stop offset="95%" stopColor="#14b8a6" stopOpacity={0} /></linearGradient></defs>
                   <XAxis dataKey="day" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={50} tickFormatter={v => `₹${v}`} />
-                  <Tooltip formatter={(v: any) => [`₹${Number(v).toLocaleString("en-IN")}`, "Revenue"]} contentStyle={{ fontSize: 11, borderRadius: 8, background: "var(--popover)", border: "1px solid var(--border)", color: "var(--popover-foreground)" }} />
+                  <Tooltip formatter={(v: unknown) => [`₹${Number(v).toLocaleString("en-IN")}`, "Revenue"]} contentStyle={{ fontSize: 11, borderRadius: 8, background: "var(--popover)", border: "1px solid var(--border)", color: "var(--popover-foreground)" }} />
                   <Area type="monotone" dataKey="amount" stroke="#14b8a6" strokeWidth={2} fill="url(#rev)" dot={false} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -141,7 +141,7 @@ export default function AnalyticsPage() {
                   <BarChart data={data.topDishes} layout="vertical" margin={{ left: 80 }}>
                     <XAxis type="number" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={80} />
-                    <Tooltip formatter={(v: any) => [v, "Quantity"]} contentStyle={{ fontSize: 11, borderRadius: 8, background: "var(--popover)", border: "1px solid var(--border)", color: "var(--popover-foreground)" }} />
+                    <Tooltip formatter={(v: unknown) => [Number(v), "Quantity"]} contentStyle={{ fontSize: 11, borderRadius: 8, background: "var(--popover)", border: "1px solid var(--border)", color: "var(--popover-foreground)" }} />
                     <Bar dataKey="qty" fill="#14b8a6" radius={[0, 4, 4, 0]} barSize={16} />
                   </BarChart>
                 </ResponsiveContainer>

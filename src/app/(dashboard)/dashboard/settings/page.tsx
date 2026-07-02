@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { useSupabase } from "@/hooks/use-supabase";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
 import { SectionHeader } from "@/components/common/section-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Building2, Store, User, CreditCard, Palette, Loader2, Save, Check, AlertTriangle } from "lucide-react";
+import { Building2, Store, User, CreditCard, Loader2, Save, Check } from "lucide-react";
 
 const PLANS = [
   { name: "Starter", price: "₹999/mo", features: ["1 Branch", "10 Staff", "100 Items", "Basic analytics"] },
@@ -25,23 +25,52 @@ const PLANS = [
 
 export default function SettingsPage() {
   const { organization, branch, staff } = useAuth();
-  const [supabase] = useState(() => createClient());
+  const supabase = useSupabase();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState("");
   const [orgForm, setOrgForm] = useState({
-    name: organization?.name || "", gst_number: organization?.gst_number || "",
-    default_tax_percent: organization?.default_tax_percent || 5,
-    tax_inclusive: organization?.tax_inclusive ?? true,
+    name: "", gst_number: "", default_tax_percent: 5, tax_inclusive: true,
   });
   const [branchForm, setBranchForm] = useState({
-    name: branch?.name || "", address: branch?.address || "",
-    city: branch?.city || "", phone: branch?.phone || "",
-    upi_vpa: branch?.upi_vpa || "",
+    name: "", address: "", city: "", phone: "", upi_vpa: "",
   });
   const [profileForm, setProfileForm] = useState({
-    full_name: staff?.full_name || "", email: staff?.email || "",
-    phone: staff?.phone || "",
+    full_name: "", email: "", phone: "",
   });
+
+  // Sync form state whenever auth data finishes loading.
+  useEffect(() => {
+    if (organization) {
+      setOrgForm({
+        name: organization.name || "",
+        gst_number: organization.gst_number || "",
+        default_tax_percent: organization.default_tax_percent ?? 5,
+        tax_inclusive: organization.tax_inclusive ?? true,
+      });
+    }
+  }, [organization]);
+
+  useEffect(() => {
+    if (branch) {
+      setBranchForm({
+        name: branch.name || "",
+        address: branch.address || "",
+        city: branch.city || "",
+        phone: branch.phone || "",
+        upi_vpa: branch.upi_vpa || "",
+      });
+    }
+  }, [branch]);
+
+  useEffect(() => {
+    if (staff) {
+      setProfileForm({
+        full_name: staff.full_name || "",
+        email: staff.email || "",
+        phone: staff.phone || "",
+      });
+    }
+  }, [staff]);
 
   const saveOrg = async () => {
     setSaving("org");

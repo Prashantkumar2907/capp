@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabase } from "@/hooks/use-supabase";
 import { SectionHeader } from "@/components/common/section-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { Plus, QrCode, MapPin, Loader2, Users, Copy, Download } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import type { TableRow } from "@/lib/supabase/types";
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
   available: { bg: "bg-green-50 dark:bg-green-950/20", text: "text-green-700 dark:text-green-400", dot: "bg-green-500" },
@@ -26,10 +27,10 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; dot: string }> =
 
 export default function TablesPage() {
   const { branch } = useAuth();
-  const [supabase] = useState(() => createClient());
+  const supabase = useSupabase();
   const queryClient = useQueryClient();
   const [addDialog, setAddDialog] = useState(false);
-  const [qrDialog, setQrDialog] = useState<any | null>(null);
+  const [qrDialog, setQrDialog] = useState<TableRow | null>(null);
   const [newLabel, setNewLabel] = useState("");
   const [newCapacity, setNewCapacity] = useState(4);
   const [isAdding, setIsAdding] = useState(false);
@@ -70,6 +71,19 @@ export default function TablesPage() {
   const copyLink = (tableNumber: number) => {
     navigator.clipboard.writeText(getQRUrl(tableNumber));
     toast.success("Link copied!");
+  };
+
+  const downloadQR = (tableNumber: number) => {
+    const svgEl = document.getElementById(`qr-svg-${tableNumber}`);
+    if (!svgEl) return;
+    const svgData = new XMLSerializer().serializeToString(svgEl);
+    const blob = new Blob([svgData], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `table-${tableNumber}-qr.svg`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -165,15 +179,15 @@ export default function TablesPage() {
           {qrDialog && (
             <div className="space-y-4 pt-2">
               <div className="flex justify-center p-4 bg-white rounded-xl">
-                <QRCodeSVG value={getQRUrl(qrDialog.table_number)} size={200} fgColor="#14b8a6" includeMargin />
+                <QRCodeSVG id={`qr-svg-${qrDialog.table_number}`} value={getQRUrl(qrDialog.table_number)} size={200} fgColor="#14b8a6" includeMargin />
               </div>
               <p className="text-xs text-muted-foreground break-all">{getQRUrl(qrDialog.table_number)}</p>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => copyLink(qrDialog.table_number)}>
                   <Copy className="h-3.5 w-3.5 mr-1" /> Copy Link
                 </Button>
-                <Button size="sm" className="flex-1 text-xs" onClick={() => window.print()}>
-                  <Download className="h-3.5 w-3.5 mr-1" /> Print
+                <Button size="sm" className="flex-1 text-xs" onClick={() => downloadQR(qrDialog.table_number)}>
+                  <Download className="h-3.5 w-3.5 mr-1" /> Download
                 </Button>
               </div>
             </div>

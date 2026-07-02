@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabase } from "@/hooks/use-supabase";
 import { SectionHeader } from "@/components/common/section-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,13 +17,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { Plus, Store, MapPin, Phone, Pencil, Users, Loader2 } from "lucide-react";
+import { getErrorMessage } from "@/lib/errors";
+import type { Branch } from "@/lib/supabase/types";
 
 export default function BranchesPage() {
   const { organization } = useAuth();
-  const [supabase] = useState(() => createClient());
+  const supabase = useSupabase();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<any | null>(null);
+  const [editing, setEditing] = useState<Branch | null>(null);
   const [form, setForm] = useState({ name: "", address: "", city: "", phone: "", upi_vpa: "", table_count: 10 });
   const [saving, setSaving] = useState(false);
 
@@ -49,8 +51,8 @@ export default function BranchesPage() {
       queryClient.invalidateQueries({ queryKey: ["branches"] });
       setDialogOpen(false); setEditing(null);
       toast.success(editing ? "Branch updated" : "Branch created");
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err));
     } finally {
       setSaving(false);
     }

@@ -197,6 +197,7 @@ export interface Database {
           id: string;
           branch_id: string;
           table_number: number;
+          label: string | null;
           capacity: number;
           status: "available" | "occupied" | "reserved" | "inactive";
           qr_code_url: string | null;
@@ -207,6 +208,7 @@ export interface Database {
           id?: string;
           branch_id: string;
           table_number: number;
+          label?: string | null;
           capacity?: number;
           status?: "available" | "occupied" | "reserved" | "inactive";
           qr_code_url?: string | null;
@@ -214,6 +216,7 @@ export interface Database {
         };
         Update: {
           table_number?: number;
+          label?: string | null;
           capacity?: number;
           status?: "available" | "occupied" | "reserved" | "inactive";
           qr_code_url?: string | null;

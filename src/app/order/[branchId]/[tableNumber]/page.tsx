@@ -3,25 +3,31 @@
 import { useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabase } from "@/hooks/use-supabase";
 import { useCartStore } from "@/stores/cart-store";
 import { formatCurrency } from "@/lib/helpers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Search, ShoppingCart, Plus, Minus, UtensilsCrossed, Leaf, Star,
+  Search, ShoppingCart, Plus, Minus, UtensilsCrossed, Leaf,
 } from "lucide-react";
 import Link from "next/link";
+import {
+  getBranchOrganization,
+  getDishPrice,
+  type BranchWithOrganization,
+  type DishWithRelations,
+} from "@/lib/domain";
 
 export default function CustomerOrderPage() {
   const params = useParams();
   const branchId = params.branchId as string;
   const tableNumber = Number(params.tableNumber);
-  const [supabase] = useState(() => createClient());
+  const supabase = useSupabase();
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [vegOnly, setVegOnly] = useState(false);
@@ -77,10 +83,12 @@ export default function CustomerOrderPage() {
     enabled: !!branchInfo?.org_id,
   });
 
-  const orgName = (branchInfo as any)?.organizations?.name || "Restaurant";
+  const orgName =
+    getBranchOrganization(branchInfo as BranchWithOrganization | null)?.name ||
+    "Restaurant";
 
   const filteredDishes = useMemo(() => {
-    return (dishes || []).filter((d: any) => {
+    return ((dishes || []) as DishWithRelations[]).filter((d) => {
       if (search && !d.name.toLowerCase().includes(search.toLowerCase())) return false;
       if (selectedCategory !== "all" && d.category_id !== selectedCategory) return false;
       if (vegOnly && !d.is_veg) return false;
@@ -89,10 +97,6 @@ export default function CustomerOrderPage() {
   }, [dishes, search, selectedCategory, vegOnly]);
 
   const getItemQty = (dishId: string) => items.find(i => i.dish_id === dishId)?.quantity || 0;
-  const getDishPrice = (dish: any) => {
-    const override = dish.branch_dishes?.[0]?.custom_price;
-    return override ? Number(override) : Number(dish.price);
-  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -167,7 +171,7 @@ export default function CustomerOrderPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {filteredDishes.map((dish: any, i: number) => {
+            {filteredDishes.map((dish, i) => {
               const qty = getItemQty(dish.id);
               const price = getDishPrice(dish);
               return (
@@ -180,9 +184,16 @@ export default function CustomerOrderPage() {
                   <Card className="overflow-hidden card-hover">
                     <CardContent className="p-0 flex">
                       {/* Image or placeholder */}
-                      <div className="w-24 h-24 bg-muted flex items-center justify-center shrink-0">
+                      <div className="w-24 h-24 bg-muted flex items-center justify-center shrink-0 relative overflow-hidden">
                         {dish.image_url ? (
-                          <img src={dish.image_url} alt={dish.name} className="h-full w-full object-cover" />
+                          <Image
+                            src={dish.image_url}
+                            alt={dish.name}
+                            fill
+                            className="object-cover"
+                            sizes="96px"
+                            unoptimized
+                          />
                         ) : (
                           <UtensilsCrossed className="h-6 w-6 text-muted-foreground" />
                         )}

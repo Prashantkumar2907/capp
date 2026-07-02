@@ -4,6 +4,7 @@ import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
+import type { Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { signInSchema, type SignInInput } from "@/lib/validations";
@@ -32,7 +33,7 @@ function SignInForm() {
   const [supabase] = useState(() => createClient());
 
   const { register, handleSubmit, formState: { errors } } = useForm<SignInInput>({
-    resolver: zodResolver(signInSchema) as any,
+    resolver: zodResolver(signInSchema) as Resolver<SignInInput>,
   });
 
   const onSubmit = async (data: SignInInput) => {

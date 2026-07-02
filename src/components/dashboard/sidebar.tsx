@@ -11,8 +11,9 @@ import {
   LayoutDashboard, ShoppingCart, ChefHat, UtensilsCrossed, Users,
   BarChart3, CreditCard, Settings, LogOut, Store, MapPin, ClipboardList,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-type NavItem = { href: string; label: string; icon: React.ComponentType<any>; roles?: string[] };
+type NavItem = { href: string; label: string; icon: LucideIcon; roles?: string[] };
 
 const NAV_SECTIONS: { label: string; items: NavItem[] }[] = [
   {

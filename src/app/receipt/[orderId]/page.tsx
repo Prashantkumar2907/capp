@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { Receipt, Star, Send, Loader2, UtensilsCrossed, Share2 } from "lucide-react";
+import type { OrderItemSummary, ReceiptOrder } from "@/lib/domain";
 
 export default function ReceiptPage() {
   const params = useParams();
@@ -30,7 +31,7 @@ export default function ReceiptPage() {
         .select("*, order_items(*), branches(name, organizations(name))")
         .eq("id", orderId)
         .single();
-      return data;
+      return data as ReceiptOrder | null;
     },
   });
 
@@ -73,8 +74,8 @@ export default function ReceiptPage() {
     );
   }
 
-  const orgName = (order as any).branches?.organizations?.name || "Restaurant";
-  const branchName = (order as any).branches?.name || "";
+  const orgName = order.branches?.organizations?.name || "Restaurant";
+  const branchName = order.branches?.name || "";
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -117,7 +118,7 @@ export default function ReceiptPage() {
             {/* Items */}
             <div className="space-y-2">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Items</h3>
-              {order.order_items?.map((item: any) => (
+              {order.order_items?.map((item: OrderItemSummary) => (
                 <div key={item.id} className="flex justify-between text-sm">
                   <span className="flex-1">
                     <span className="font-medium">{item.quantity}×</span>{" "}

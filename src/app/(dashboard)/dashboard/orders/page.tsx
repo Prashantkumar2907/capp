@@ -2,10 +2,11 @@
 
 import { useAuth } from "@/hooks/use-auth";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
+import { useOrderAlert } from "@/hooks/use-order-alert";
+import { useSupabase } from "@/hooks/use-supabase";
+import { useMutation } from "@tanstack/react-query";
 import { formatCurrency, timeAgo } from "@/lib/helpers";
-import { ORDER_STATUS_LABELS, ITEM_STATUS_LABELS } from "@/lib/constants";
+import { ORDER_STATUS_LABELS } from "@/lib/constants";
 import { SectionHeader } from "@/components/common/section-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,7 +17,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { Clock, ChevronRight, ShoppingCart, Volume2, VolumeX } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
+import type { OrderItem } from "@/lib/supabase/types";
 
 const KANBAN_COLUMNS = [
   { status: "pending", label: "Pending", color: "border-amber-400", bg: "bg-amber-400" },
@@ -36,23 +38,11 @@ function getTimeColor(createdAt: string) {
 export default function OrdersPage() {
   const { branch } = useAuth();
   const { orders, isLoading, refetch } = useRealtimeOrders(branch?.id);
-  const supabase = createClient();
+  const supabase = useSupabase();
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const prevCount = useRef(0);
 
-  useEffect(() => {
-    if (orders && orders.length > prevCount.current && prevCount.current > 0 && soundEnabled) {
-      try {
-        const ctx = new AudioContext();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.frequency.value = 800; gain.gain.value = 0.3;
-        osc.start(); osc.stop(ctx.currentTime + 0.2);
-      } catch {}
-    }
-    prevCount.current = orders?.length || 0;
-  }, [orders?.length, soundEnabled]);
+  // Centralised sound alert — fires when active order count increases.
+  useOrderAlert(orders?.length ?? 0, soundEnabled);
 
   const updateStatus = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
@@ -135,7 +125,7 @@ export default function OrdersPage() {
 
                             {/* Items */}
                             <div className="space-y-1">
-                              {order.order_items?.slice(0, 4).map((item: any) => (
+                              {order.order_items?.slice(0, 4).map((item: OrderItem) => (
                                 <div key={item.id} className="flex items-center justify-between text-[11px]">
                                   <span className="truncate flex-1 text-muted-foreground">
                                     <span className="font-medium text-foreground">{item.quantity}×</span> {item.dish_name}

@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabase } from "@/hooks/use-supabase";
 import { formatCurrency } from "@/lib/helpers";
 import { SectionHeader } from "@/components/common/section-header";
 import { StatCard } from "@/components/common/stat-card";
@@ -20,6 +20,7 @@ import { motion } from "framer-motion";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from "recharts";
+import type { PaymentWithOrder } from "@/lib/domain";
 
 const METHOD_ICONS: Record<string, React.ReactNode> = {
   upi: <Smartphone className="h-4.5 w-4.5" />,
@@ -49,7 +50,7 @@ type FilterMethod = "all" | "upi" | "razorpay" | "cash" | "card";
 
 export default function PaymentsPage() {
   const { branch } = useAuth();
-  const [supabase] = useState(() => createClient());
+  const supabase = useSupabase();
   const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
   const [methodFilter, setMethodFilter] = useState<FilterMethod>("all");
 
@@ -62,7 +63,7 @@ export default function PaymentsPage() {
         .eq("branch_id", branch!.id)
         .order("created_at", { ascending: false })
         .limit(200);
-      return data || [];
+      return (data || []) as PaymentWithOrder[];
     },
     enabled: !!branch,
   });
@@ -250,11 +251,11 @@ export default function PaymentsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold">
-                        #{(payment as any).orders?.order_number || "—"}
+                        #{payment.orders?.order_number || "—"}
                       </span>
-                      {(payment as any).orders?.table_number && (
+                      {payment.orders?.table_number && (
                         <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-md">
-                          Table {(payment as any).orders.table_number}
+                          Table {payment.orders.table_number}
                         </span>
                       )}
                     </div>

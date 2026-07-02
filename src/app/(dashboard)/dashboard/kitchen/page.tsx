@@ -2,8 +2,9 @@
 
 import { useAuth } from "@/hooks/use-auth";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
+import { useOrderAlert } from "@/hooks/use-order-alert";
+import { useSupabase } from "@/hooks/use-supabase";
 import { useMutation } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
 import { SectionHeader } from "@/components/common/section-header";
 import { EmptyState } from "@/components/common/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { ChefHat, Clock, Check, ArrowRight, Volume2, VolumeX } from "lucide-react";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
+import type { OrderItem } from "@/lib/supabase/types";
 
 function getElapsedMinutes(created: string) {
   return Math.floor((Date.now() - new Date(created).getTime()) / 60000);
@@ -27,33 +29,20 @@ function getUrgencyColor(minutes: number) {
 export default function KitchenPage() {
   const { branch } = useAuth();
   const { orders, isLoading, refetch } = useRealtimeOrders(branch?.id);
-  const supabase = createClient();
+  const supabase = useSupabase();
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [, setTick] = useState(0);
-  const prevCount = useRef(0);
+
+  const kitchenOrders = orders?.filter(o => ["pending", "confirmed", "preparing", "ready"].includes(o.status)) || [];
+
+  // Drive the useOrderAlert hook with the current kitchen queue size.
+  useOrderAlert(kitchenOrders.filter(o => ["pending", "confirmed", "preparing"].includes(o.status)).length, soundEnabled);
 
   // Refresh timer display every 30s
   useEffect(() => {
     const interval = setInterval(() => setTick(t => t + 1), 30000);
     return () => clearInterval(interval);
   }, []);
-
-  // Sound alert
-  useEffect(() => {
-    const kitchenOrders = orders?.filter(o => ["pending", "confirmed", "preparing"].includes(o.status)) || [];
-    if (kitchenOrders.length > prevCount.current && prevCount.current > 0 && soundEnabled) {
-      try {
-        const ctx = new AudioContext();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.frequency.value = 880; gain.gain.value = 0.4;
-        osc.start(); osc.stop(ctx.currentTime + 0.3);
-        setTimeout(() => { const o2 = ctx.createOscillator(); const g2 = ctx.createGain(); o2.connect(g2); g2.connect(ctx.destination); o2.frequency.value = 1100; g2.gain.value = 0.3; o2.start(); o2.stop(ctx.currentTime + 0.2); }, 200);
-      } catch {}
-    }
-    prevCount.current = kitchenOrders.length;
-  }, [orders, soundEnabled]);
 
   const updateStatus = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
@@ -63,8 +52,6 @@ export default function KitchenPage() {
     onSuccess: () => { refetch(); toast.success("Updated"); },
     onError: (err: Error) => toast.error(err.message),
   });
-
-  const kitchenOrders = orders?.filter(o => ["pending", "confirmed", "preparing", "ready"].includes(o.status)) || [];
 
   return (
     <div className="space-y-5">
@@ -116,7 +103,7 @@ export default function KitchenPage() {
                   <CardContent className="p-4 space-y-3">
                     {/* Items */}
                     <div className="space-y-2">
-                      {order.order_items?.map((item: any) => (
+                      {order.order_items?.map((item: OrderItem) => (
                         <div key={item.id} className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
                           <div className="flex items-center gap-2 flex-1">
                             <span className="h-6 w-6 rounded-md bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">

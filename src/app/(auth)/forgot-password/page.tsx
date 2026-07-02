@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
+import type { Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { forgotPasswordSchema, type ForgotPasswordInput } from "@/lib/validations";
@@ -19,7 +20,7 @@ export default function ForgotPasswordPage() {
   const [supabase] = useState(() => createClient());
 
   const { register, handleSubmit, formState: { errors }, getValues } = useForm<ForgotPasswordInput>({
-    resolver: zodResolver(forgotPasswordSchema) as any,
+    resolver: zodResolver(forgotPasswordSchema) as Resolver<ForgotPasswordInput>,
   });
 
   const onSubmit = async (data: ForgotPasswordInput) => {

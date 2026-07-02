@@ -1,11 +1,40 @@
 "use client";
 
 import { createBrowserClient } from "@supabase/ssr";
+import type {
+  AuthChangeEvent,
+  Session,
+} from "@supabase/supabase-js";
 import {
-  TEST_USER, TEST_ORG, TEST_BRANCH, TEST_STAFF, 
-  TEST_CATEGORIES, TEST_DISHES, TEST_TABLES, 
-  TEST_ORDERS, TEST_PAYMENTS, TEST_DAILY_STATS
+  TEST_USER,
+  TEST_ORG,
+  TEST_BRANCH,
+  TEST_STAFF,
+  TEST_CATEGORIES,
+  TEST_DISHES,
+  TEST_TABLES,
+  TEST_ORDERS,
+  TEST_PAYMENTS,
 } from "./test-data";
+
+type MockQueryResult = { data: unknown; error: null };
+type MockQueryResolve = (value: MockQueryResult) => void;
+
+interface MockQueryBuilder {
+  isSingle: boolean;
+  select: () => MockQueryBuilder;
+  eq: () => MockQueryBuilder;
+  or: () => MockQueryBuilder;
+  order: () => MockQueryBuilder;
+  limit: () => MockQueryBuilder;
+  single: () => MockQueryBuilder;
+  insert: () => MockQueryBuilder;
+  update: () => MockQueryBuilder;
+  delete: () => MockQueryBuilder;
+  gte: () => MockQueryBuilder;
+  lte: () => MockQueryBuilder;
+  then: (resolve: MockQueryResolve) => void;
+}
 
 export function createClient() {
   const supabase = createBrowserClient(
@@ -20,9 +49,17 @@ export function createClient() {
         if (prop === "auth") {
           return {
             getUser: async () => ({ data: { user: TEST_USER } }),
-            onAuthStateChange: (cb: any) => { 
+            onAuthStateChange: (
+              cb: (event: AuthChangeEvent, session: Session | null) => void
+            ) => {
               // We setTimeout to avoid React state updates during render
-              setTimeout(() => cb("SIGNED_IN", { user: TEST_USER }), 0); 
+              setTimeout(
+                () =>
+                  cb("SIGNED_IN", {
+                    user: TEST_USER,
+                  } as unknown as Session),
+                0
+              );
               return { data: { subscription: { unsubscribe: () => {} } } };
             },
             signInWithPassword: async () => ({ error: null }),
@@ -44,7 +81,7 @@ export function createClient() {
 
         if (prop === "from") {
           return (table: string) => {
-            const builder: any = {
+            const builder: MockQueryBuilder = {
               isSingle: false,
               select: () => builder,
               eq: () => builder,
@@ -57,8 +94,8 @@ export function createClient() {
               delete: () => builder,
               gte: () => builder,
               lte: () => builder,
-              then: (resolve: any) => {
-                let mockData: any = [];
+              then: (resolve: MockQueryResolve) => {
+                let mockData: unknown = [];
                 switch(table) {
                   case "organizations": mockData = [TEST_ORG]; break;
                   case "branches": mockData = [TEST_BRANCH]; break;
@@ -68,8 +105,8 @@ export function createClient() {
                   case "tables": mockData = TEST_TABLES; break;
                   case "orders": mockData = TEST_ORDERS; break;
                   case "payments": mockData = TEST_PAYMENTS; break;
-                  case "order_items": mockData = TEST_ORDERS.flatMap((o: any) => o.order_items); break;
-                  case "branch_dishes": mockData = TEST_DISHES.map((d:any) => ({ is_available: d.is_available, custom_price: null })); break;
+                  case "order_items": mockData = TEST_ORDERS.flatMap((o) => [...o.order_items]); break;
+                  case "branch_dishes": mockData = TEST_DISHES.map((d) => ({ is_available: d.is_available, custom_price: null })); break;
                 }
 
                 if (builder.isSingle) {
@@ -91,7 +128,7 @@ export function createClient() {
 
         return Reflect.get(target, prop);
       }
-    });
+    }) as typeof supabase;
   }
 
   return supabase;
