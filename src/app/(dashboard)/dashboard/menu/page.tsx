@@ -1,415 +1,207 @@
 "use client";
 
-import { useState } from "react";
-import { useAuth } from "@/hooks/use-auth";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSupabase } from "@/hooks/use-supabase";
-import { useForm, useWatch } from "react-hook-form";
-import type { Resolver } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { categorySchema, dishSchema, type CategoryInput, type DishInput } from "@/lib/validations";
-import { getDishCategoryName, type DishWithRelations } from "@/lib/domain";
-import { formatCurrency } from "@/lib/helpers";
-import { SectionHeader } from "@/components/common/section-header";
-import { EmptyState } from "@/components/common/empty-state";
-import { VegIndicator } from "@/components/common/veg-indicator";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Edit2, ImagePlus, Leaf, Plus, Search, Trash2, UtensilsCrossed } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "sonner";
-import { motion } from "framer-motion";
-import {
-  Plus, Pencil, Trash2, Loader2, Search, LayoutGrid, List, UtensilsCrossed,
-  ImagePlus,
-} from "lucide-react";
-import type { Category } from "@/lib/supabase/types";
+import { EmptyState } from "@/components/shared/empty-state";
+import { PageHeader } from "@/components/shared/page-header";
+import { createClient } from "@/lib/supabase/client";
+import { getBranchMenu } from "@/lib/supabase/queries";
+import { formatCurrency } from "@/lib/utils";
+import { useAuth } from "@/features/auth/auth-provider";
+import type { Category, DishWithRelations } from "@/types/database";
+
+const emptyDish = { name: "", description: "", price: 0, category_id: "", is_veg: true, is_active: true, prep_time_mins: 15 };
+const emptyCategory = { name: "", sort_order: 0, is_active: true };
 
 export default function MenuPage() {
   const { organization, branch } = useAuth();
-  const supabase = useSupabase();
+  const [supabase] = useState(() => createClient());
   const queryClient = useQueryClient();
-  const [catDialogOpen, setCatDialogOpen] = useState(false);
-  const [dishDialogOpen, setDishDialogOpen] = useState(false);
-  const [editingDish, setEditingDish] = useState<DishWithRelations | null>(null);
-  const [editingCat, setEditingCat] = useState<Category | null>(null);
   const [search, setSearch] = useState("");
-  const [filterCategory, setFilterCategory] = useState("all");
-  const [filterVeg, setFilterVeg] = useState<"all" | "veg" | "nonveg">("all");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [dishOpen, setDishOpen] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [editingDish, setEditingDish] = useState<DishWithRelations | null>(null);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [dishForm, setDishForm] = useState(emptyDish);
+  const [categoryForm, setCategoryForm] = useState(emptyCategory);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
 
-  const { data: categories, isLoading: catsLoading } = useQuery({
-    queryKey: ["categories", organization?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("categories").select("*").eq("org_id", organization!.id).order("sort_order");
-      return (data || []) as Category[];
-    },
+  const menu = useQuery({
+    queryKey: ["menu", organization?.id],
+    queryFn: () => getBranchMenu(supabase, organization!.id),
     enabled: !!organization,
   });
 
-  const { data: dishes, isLoading: dishesLoading } = useQuery({
-    queryKey: ["dishes", organization?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("dishes").select("*, categories(name)").eq("org_id", organization!.id).order("name");
-      return (data || []) as DishWithRelations[];
-    },
-    enabled: !!organization,
-  });
-
-  const catForm = useForm<CategoryInput>({ resolver: zodResolver(categorySchema) as Resolver<CategoryInput>, defaultValues: { name: "", sort_order: 0, is_active: true } });
-  const dishForm = useForm<DishInput>({ resolver: zodResolver(dishSchema) as Resolver<DishInput>, defaultValues: { name: "", description: "", price: 0, category_id: null, is_veg: false, is_active: true } });
-  const dishIsVeg = useWatch({ control: dishForm.control, name: "is_veg", defaultValue: false });
-  const dishIsActive = useWatch({ control: dishForm.control, name: "is_active", defaultValue: true });
-
-  const saveCat = useMutation({
-    mutationFn: async (data: CategoryInput) => {
-      if (editingCat) {
-        const { error } = await supabase.from("categories").update(data).eq("id", editingCat.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("categories").insert({ ...data, org_id: organization!.id });
-        if (error) throw error;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
-      setCatDialogOpen(false); setEditingCat(null); catForm.reset();
-      toast.success(editingCat ? "Category updated" : "Category created");
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  const deleteCat = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("categories").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["categories"] }); toast.success("Category deleted"); },
-  });
-
-  const uploadImage = async (file: File): Promise<string | null> => {
-    const ext = file.name.split(".").pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const { error } = await supabase.storage.from("dish-images").upload(fileName, file);
-    if (error) { toast.error("Image upload failed"); return null; }
-    const { data } = supabase.storage.from("dish-images").getPublicUrl(fileName);
-    return data.publicUrl;
-  };
-
-  const openDishEditor = (dish: DishWithRelations) => {
-    setEditingDish(dish);
-    dishForm.reset({
-      name: dish.name,
-      description: dish.description ?? "",
-      price: Number(dish.price),
-      category_id: dish.category_id,
-      is_veg: dish.is_veg,
-      is_active: dish.is_active,
+  const dishes = useMemo(() => {
+    return (menu.data?.dishes ?? []).filter((dish) => {
+      if (search && !dish.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (categoryFilter !== "all" && dish.category_id !== categoryFilter) return false;
+      return true;
     });
-    setDishDialogOpen(true);
+  }, [menu.data?.dishes, search, categoryFilter]);
+
+  const uploadImage = async () => {
+    if (!imageFile) return editingDish?.image_url ?? null;
+    const ext = imageFile.name.split(".").pop() || "jpg";
+    const path = `${organization!.id}/${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage.from("dish-images").upload(path, imageFile, { upsert: true });
+    if (error) throw error;
+    return supabase.storage.from("dish-images").getPublicUrl(path).data.publicUrl;
   };
 
   const saveDish = useMutation({
-    mutationFn: async (data: DishInput) => {
-      let imageUrl = editingDish?.image_url || null;
-      if (imageFile) {
-        setUploading(true);
-        imageUrl = await uploadImage(imageFile);
-        setUploading(false);
-      }
-
+    mutationFn: async () => {
+      const image_url = await uploadImage();
       const payload = {
-        ...data,
-        category_id: !data.category_id || data.category_id === "none" ? null : data.category_id,
-        image_url: imageUrl,
+        name: dishForm.name,
+        description: dishForm.description || null,
+        price: dishForm.price,
+        category_id: dishForm.category_id || null,
+        is_veg: dishForm.is_veg,
+        is_active: dishForm.is_active,
+        prep_time_mins: dishForm.prep_time_mins,
+        image_url,
       };
-
       if (editingDish) {
         const { error } = await supabase.from("dishes").update(payload).eq("id", editingDish.id);
         if (error) throw error;
-      } else {
-        const { data: newDish, error } = await supabase.from("dishes").insert({ ...payload, org_id: organization!.id }).select("id").single();
-        if (error) throw error;
-        if (newDish && branch) {
-          await supabase.from("branch_dishes").insert({ branch_id: branch.id, dish_id: newDish.id });
-        }
+        return;
       }
+      const { data, error } = await supabase.from("dishes").insert({ ...payload, org_id: organization!.id }).select("*").single();
+      if (error) throw error;
+      if (data && branch) await supabase.from("branch_dishes").insert({ branch_id: branch.id, dish_id: data.id });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dishes"] });
-      setDishDialogOpen(false); setEditingDish(null); dishForm.reset(); setImageFile(null);
-      toast.success(editingDish ? "Dish updated" : "Dish created");
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["menu"] });
+      setDishOpen(false);
+      setEditingDish(null);
+      setDishForm(emptyDish);
+      setImageFile(null);
+      toast.success("Dish saved");
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (error) => toast.error(error.message),
   });
 
-  const deleteDish = useMutation({
+  const saveCategory = useMutation({
+    mutationFn: async () => {
+      if (editingCategory) {
+        const { error } = await supabase.from("categories").update(categoryForm).eq("id", editingCategory.id);
+        if (error) throw error;
+        return;
+      }
+      const { error } = await supabase.from("categories").insert({ ...categoryForm, org_id: organization!.id });
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["menu"] });
+      setCategoryOpen(false);
+      setEditingCategory(null);
+      setCategoryForm(emptyCategory);
+      toast.success("Category saved");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const removeDish = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("dishes").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["dishes"] }); toast.success("Dish deleted"); },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["menu"] }),
   });
 
-  const toggleDishActive = useMutation({
-    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await supabase.from("dishes").update({ is_active }).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["dishes"] }),
-  });
-
-  const filteredDishes = dishes?.filter(d => {
-    if (search && !d.name.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filterCategory !== "all" && d.category_id !== filterCategory) return false;
-    if (filterVeg === "veg" && !d.is_veg) return false;
-    if (filterVeg === "nonveg" && d.is_veg) return false;
-    return true;
-  }) || [];
+  const editDish = (dish: DishWithRelations) => {
+    setEditingDish(dish);
+    setDishForm({ name: dish.name, description: dish.description ?? "", price: Number(dish.price), category_id: dish.category_id ?? "", is_veg: dish.is_veg, is_active: dish.is_active, prep_time_mins: dish.prep_time_mins });
+    setDishOpen(true);
+  };
 
   return (
     <div className="space-y-5">
-      <SectionHeader
-        title="Menu"
-        description={`${dishes?.length || 0} dishes in ${categories?.length || 0} categories`}
-      />
-
-      <Tabs defaultValue="dishes" className="w-full">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <TabsList className="h-9">
-            <TabsTrigger value="dishes" className="text-xs">Dishes</TabsTrigger>
-            <TabsTrigger value="categories" className="text-xs">Categories</TabsTrigger>
-          </TabsList>
+      <PageHeader title="Menu" description={`${menu.data?.dishes.length ?? 0} dishes | ${menu.data?.categories.length ?? 0} categories`} actions={<><Button variant="secondary" onClick={() => setCategoryOpen(true)}><Plus className="h-4 w-4" />Category</Button><Button onClick={() => { setEditingDish(null); setDishForm(emptyDish); setDishOpen(true); }}><Plus className="h-4 w-4" />Dish</Button></>} />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-64 flex-1 sm:max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input className="pl-9" placeholder="Search dishes" value={search} onChange={(event) => setSearch(event.target.value)} />
         </div>
-
-        {/* Dishes Tab */}
-        <TabsContent value="dishes" className="mt-4 space-y-4">
-          {/* Toolbar */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[200px] max-w-xs">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input className="h-9 text-xs pl-9" placeholder="Search dishes..." value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-            <div className="flex gap-1.5">
-              {[{ v: "all", l: "All" }, { v: "veg", l: "🟢 Veg" }, { v: "nonveg", l: "🔴 Non-Veg" }].map(f => (
-                <button key={f.v} onClick={() => setFilterVeg(f.v as "all" | "veg" | "nonveg")}
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${filterVeg === f.v ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
-                  {f.l}
-                </button>
-              ))}
-            </div>
-            <select className="h-9 text-xs border border-border rounded-lg px-2 bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
-              <option value="all">All Categories</option>
-              {categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <div className="flex border border-border rounded-lg overflow-hidden ml-auto">
-              <button onClick={() => setViewMode("list")} className={`p-1.5 ${viewMode === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
-                <List className="h-4 w-4" />
-              </button>
-              <button onClick={() => setViewMode("grid")} className={`p-1.5 ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
-                <LayoutGrid className="h-4 w-4" />
-              </button>
-            </div>
-            <Dialog open={dishDialogOpen} onOpenChange={(open) => { setDishDialogOpen(open); if (!open) { setEditingDish(null); dishForm.reset(); setImageFile(null); } }}>
-              <Button size="sm" className="h-9 text-xs" onClick={() => setDishDialogOpen(true)}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Add Dish
-              </Button>
-              <DialogContent className="max-w-md">
-                <DialogHeader><DialogTitle className="text-sm">{editingDish ? "Edit Dish" : "Add Dish"}</DialogTitle></DialogHeader>
-                <form onSubmit={dishForm.handleSubmit((d) => saveDish.mutate(d))} className="space-y-4">
-                  {/* Image upload */}
-                  <div className="flex items-center gap-4">
-                    <div className="h-20 w-20 rounded-xl border-2 border-dashed border-border flex items-center justify-center bg-muted/50 shrink-0 overflow-hidden">
-                      {imageFile ? (
-                        <img src={URL.createObjectURL(imageFile)} alt="" className="h-full w-full object-cover rounded-xl" />
-                      ) : editingDish?.image_url ? (
-                        <img src={editingDish.image_url} alt="" className="h-full w-full object-cover rounded-xl" />
-                      ) : (
-                        <ImagePlus className="h-6 w-6 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <Label className="text-xs cursor-pointer text-primary hover:underline">
-                        Upload Image
-                        <input type="file" accept="image/*" className="hidden" onChange={e => setImageFile(e.target.files?.[0] || null)} />
-                      </Label>
-                      <p className="text-[10px] text-muted-foreground mt-1">JPG, PNG, max 2MB</p>
+        <Select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="w-48">
+          <option value="all">All categories</option>
+          {menu.data?.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+        </Select>
+      </div>
+      {menu.isLoading ? (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-32" />)}</div>
+      ) : dishes.length ? (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {dishes.map((dish) => (
+            <Card key={dish.id}>
+              <CardContent className="flex gap-3 p-3">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-secondary">
+                  {dish.image_url ? <div className="h-full w-full bg-cover bg-center" role="img" aria-label={dish.name} style={{ backgroundImage: `url(${dish.image_url})` }} /> : <UtensilsCrossed className="h-6 w-6 text-muted-foreground" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="truncate text-sm font-semibold">{dish.name}</h2>
+                    {dish.is_veg ? <Leaf className="h-3.5 w-3.5 text-success" /> : null}
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{dish.description || dish.categories?.name || "No description"}</p>
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="font-numbers text-sm font-semibold text-primary">{formatCurrency(dish.price)}</span>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => editDish(dish)}><Edit2 className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => removeDish.mutate(dish.id)}><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Name</Label>
-                    <Input className="h-9 text-xs" {...dishForm.register("name")} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Description</Label>
-                    <Textarea className="text-xs min-h-[60px]" {...dishForm.register("description")} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Price (₹)</Label>
-                      <Input className="h-9 text-xs" type="number" step="0.5" {...dishForm.register("price", { valueAsNumber: true })} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Category</Label>
-                      <select className="w-full h-9 text-xs border border-border rounded-md px-2 bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring" {...dishForm.register("category_id")}>
-                        <option value="">None</option>
-                        {categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <label className="flex items-center gap-2 text-xs cursor-pointer">
-                      <Switch checked={dishIsVeg} onCheckedChange={(v) => dishForm.setValue("is_veg", v)} /> Vegetarian
-                    </label>
-                    <label className="flex items-center gap-2 text-xs cursor-pointer">
-                      <Switch checked={dishIsActive} onCheckedChange={(v) => dishForm.setValue("is_active", v)} /> Active
-                    </label>
-                  </div>
-                  <Button type="submit" className="w-full h-9 text-xs" disabled={saveDish.isPending || uploading}>
-                    {(saveDish.isPending || uploading) && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-                    {editingDish ? "Update Dish" : "Create Dish"}
-                  </Button>
-                </form>
-              </DialogContent>
-            </Dialog>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <EmptyState icon={UtensilsCrossed} title="No dishes found" description="Add dishes or adjust the filters." actionLabel="Add dish" onAction={() => setDishOpen(true)} />
+      )}
+      <Dialog open={dishOpen} title={editingDish ? "Edit dish" : "Add dish"} onOpenChange={setDishOpen}>
+        <div className="space-y-3">
+          <label className="flex items-center gap-3 rounded-2xl border bg-secondary p-3">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-card"><ImagePlus className="h-5 w-5 text-muted-foreground" /></div>
+            <span className="text-sm font-medium">Upload dish image</span>
+            <input type="file" accept="image/*" className="hidden" onChange={(event) => setImageFile(event.target.files?.[0] ?? null)} />
+          </label>
+          <Field label="Name"><Input value={dishForm.name} onChange={(event) => setDishForm({ ...dishForm, name: event.target.value })} /></Field>
+          <Field label="Description"><Textarea value={dishForm.description} onChange={(event) => setDishForm({ ...dishForm, description: event.target.value })} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Price"><Input type="number" value={dishForm.price} onChange={(event) => setDishForm({ ...dishForm, price: Number(event.target.value) })} /></Field>
+            <Field label="Prep mins"><Input type="number" value={dishForm.prep_time_mins} onChange={(event) => setDishForm({ ...dishForm, prep_time_mins: Number(event.target.value) })} /></Field>
           </div>
-
-          {dishesLoading ? (
-            <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
-          ) : filteredDishes.length === 0 ? (
-            <EmptyState icon={UtensilsCrossed} title="No dishes found" description={search ? "Try a different search term" : "Add your first dish to get started"} actionLabel="Add Dish" onAction={() => setDishDialogOpen(true)} />
-          ) : viewMode === "list" ? (
-            <div className="space-y-2">
-              {filteredDishes.map((dish, i) => (
-                <motion.div key={dish.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-                  <Card className="card-hover">
-                    <CardContent className="p-3 flex items-center gap-3">
-                      {/* Dish image or placeholder */}
-                      <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden">
-                        {dish.image_url ? (
-                          <img src={dish.image_url} alt={dish.name} className="h-full w-full object-cover" />
-                        ) : (
-                          <UtensilsCrossed className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <VegIndicator isVeg={dish.is_veg} className="h-3 w-3" />
-                          <span className="text-sm font-medium truncate">{dish.name}</span>
-                          {!dish.is_active && <Badge variant="secondary" className="text-[9px] h-4">Inactive</Badge>}
-                        </div>
-                        <p className="text-[10px] text-muted-foreground truncate">{getDishCategoryName(dish)}</p>
-                      </div>
-                      <span className="text-sm font-bold text-primary shrink-0">{formatCurrency(dish.price)}</span>
-                      <Switch checked={dish.is_active} onCheckedChange={(checked) => toggleDishActive.mutate({ id: dish.id, is_active: checked })} className="shrink-0" />
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => openDishEditor(dish)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive" onClick={() => { if (confirm("Delete this dish?")) deleteDish.mutate(dish.id); }}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {filteredDishes.map((dish, i) => (
-                <motion.div key={dish.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.03 }}>
-                  <Card className="card-hover overflow-hidden group">
-                    <div className="h-32 bg-muted flex items-center justify-center relative overflow-hidden">
-                      {dish.image_url ? (
-                        <img src={dish.image_url} alt={dish.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                      ) : (
-                        <UtensilsCrossed className="h-8 w-8 text-muted-foreground" />
-                      )}
-                      <div className="absolute top-2 left-2">
-                        <VegIndicator isVeg={dish.is_veg} className="h-5 w-5 bg-white dark:bg-card" dotClassName="h-2 w-2" />
-                      </div>
-                      {!dish.is_active && (
-                        <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
-                          <Badge variant="secondary" className="text-xs">Inactive</Badge>
-                        </div>
-                      )}
-                    </div>
-                    <CardContent className="p-3">
-                      <h4 className="text-sm font-medium truncate">{dish.name}</h4>
-                      <p className="text-[10px] text-muted-foreground truncate">{getDishCategoryName(dish)}</p>
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="text-sm font-bold text-primary">{formatCurrency(dish.price)}</span>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openDishEditor(dish)}><Pencil className="h-3 w-3" /></Button>
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => { if (confirm("Delete?")) deleteDish.mutate(dish.id); }}><Trash2 className="h-3 w-3" /></Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* Categories Tab */}
-        <TabsContent value="categories" className="mt-4 space-y-4">
-          <div className="flex justify-end">
-            <Dialog open={catDialogOpen} onOpenChange={(open) => { setCatDialogOpen(open); if (!open) { setEditingCat(null); catForm.reset(); } }}>
-              <Button size="sm" className="h-9 text-xs" onClick={() => setCatDialogOpen(true)}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Add Category
-              </Button>
-              <DialogContent className="max-w-sm">
-                <DialogHeader><DialogTitle className="text-sm">{editingCat ? "Edit Category" : "Add Category"}</DialogTitle></DialogHeader>
-                <form onSubmit={catForm.handleSubmit((d) => saveCat.mutate(d))} className="space-y-4">
-                  <div className="space-y-1.5"><Label className="text-xs">Name</Label><Input className="h-9 text-xs" {...catForm.register("name")} /></div>
-                  <div className="space-y-1.5"><Label className="text-xs">Sort Order</Label><Input className="h-9 text-xs" type="number" {...catForm.register("sort_order", { valueAsNumber: true })} /></div>
-                  <Button type="submit" className="w-full h-9 text-xs" disabled={saveCat.isPending}>
-                    {saveCat.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-                    {editingCat ? "Update" : "Create"}
-                  </Button>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          {catsLoading ? (
-            <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
-          ) : (
-            <div className="space-y-2">
-              {categories?.map((cat, i) => (
-                <motion.div key={cat.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                  <Card className="card-hover">
-                    <CardContent className="p-3 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center"><span className="text-sm">{i + 1}</span></div>
-                        <div>
-                          <span className="text-sm font-medium">{cat.name}</span>
-                          <p className="text-[10px] text-muted-foreground">
-                            {dishes?.filter(d => d.category_id === cat.id).length || 0} dishes · Order: {cat.sort_order}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { setEditingCat(cat); catForm.reset(cat); setCatDialogOpen(true); }}><Pencil className="h-3.5 w-3.5" /></Button>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive" onClick={() => { if (confirm("Delete?")) deleteCat.mutate(cat.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-              {categories?.length === 0 && <EmptyState icon={UtensilsCrossed} title="No categories yet" actionLabel="Add Category" onAction={() => setCatDialogOpen(true)} />}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+          <Field label="Category"><Select value={dishForm.category_id} onChange={(event) => setDishForm({ ...dishForm, category_id: event.target.value })}><option value="">Uncategorized</option>{menu.data?.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</Select></Field>
+          <div className="flex items-center justify-between rounded-xl border p-3 text-sm">Vegetarian<Switch checked={dishForm.is_veg} onCheckedChange={(checked) => setDishForm({ ...dishForm, is_veg: checked })} /></div>
+          <div className="flex items-center justify-between rounded-xl border p-3 text-sm">Active<Switch checked={dishForm.is_active} onCheckedChange={(checked) => setDishForm({ ...dishForm, is_active: checked })} /></div>
+          <Button className="w-full" disabled={!dishForm.name || saveDish.isPending} onClick={() => saveDish.mutate()}>Save dish</Button>
+        </div>
+      </Dialog>
+      <Dialog open={categoryOpen} title={editingCategory ? "Edit category" : "Add category"} onOpenChange={setCategoryOpen}>
+        <div className="space-y-3">
+          <Field label="Name"><Input value={categoryForm.name} onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })} /></Field>
+          <Field label="Sort order"><Input type="number" value={categoryForm.sort_order} onChange={(event) => setCategoryForm({ ...categoryForm, sort_order: Number(event.target.value) })} /></Field>
+          <Button className="w-full" disabled={!categoryForm.name || saveCategory.isPending} onClick={() => saveCategory.mutate()}>Save category</Button>
+        </div>
+      </Dialog>
     </div>
   );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="space-y-1.5"><Label>{label}</Label>{children}</div>;
 }

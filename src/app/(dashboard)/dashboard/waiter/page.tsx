@@ -1,239 +1,215 @@
 "use client";
 
-import { useState } from "react";
-import { useAuth } from "@/hooks/use-auth";
-import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
-import { useSupabase } from "@/hooks/use-supabase";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { formatCurrency, generateOrderNumber, timeAgo, calculateTax } from "@/lib/helpers";
-import { SectionHeader } from "@/components/common/section-header";
-import { EmptyState } from "@/components/common/empty-state";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Armchair, Search, Send, ShoppingBag, Table2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { toast } from "sonner";
-import { motion } from "framer-motion";
-import { ClipboardList, Plus, Minus, Check, ShoppingBag, Search, Loader2, Clock } from "lucide-react";
-import { getErrorMessage } from "@/lib/errors";
-import type { Dish, OrderItem } from "@/lib/supabase/types";
+import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/shared/page-header";
+import { StatCard } from "@/components/shared/stat-card";
+import { DishTile } from "@/components/features/menu/dish-tile";
+import { CartPanel } from "@/components/features/cart/cart-panel";
+import { createClient } from "@/lib/supabase/client";
+import { getBranchMenu } from "@/lib/supabase/queries";
+import { calculateTotals } from "@/lib/utils";
+import { useAuth } from "@/features/auth/auth-provider";
+import type { CartItem } from "@/stores/cart-store";
+import type { RestaurantTable } from "@/types/database";
 
 export default function WaiterPage() {
-  const { branch, staff, organization } = useAuth();
-  const { orders, refetch } = useRealtimeOrders(branch?.id);
-  const supabase = useSupabase();
-  const [selectedTable, setSelectedTable] = useState<number | null>(null);
-  const [orderDialog, setOrderDialog] = useState(false);
-  const [cart, setCart] = useState<Record<string, { name: string; qty: number; price: number }>>({});
+  const { organization, branch, staff } = useAuth();
+  const [supabase] = useState(() => createClient());
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [placing, setPlacing] = useState(false);
+  const [categoryId, setCategoryId] = useState("all");
+  const [tableNumber, setTableNumber] = useState<number | null>(null);
+  const [customerName, setCustomerName] = useState("");
+  const [notes, setNotes] = useState("");
+  const [items, setItems] = useState<CartItem[]>([]);
 
-  const { data: tables } = useQuery({
-    queryKey: ["tables-waiter", branch?.id],
+  const menu = useQuery({
+    queryKey: ["menu", organization?.id],
+    queryFn: () => getBranchMenu(supabase, organization!.id),
+    enabled: !!organization,
+  });
+
+  const tables = useQuery({
+    queryKey: ["tables", branch?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("tables").select("*").eq("branch_id", branch!.id).order("table_number");
-      return data || [];
+      const { data, error } = await supabase.from("tables").select("*").eq("branch_id", branch!.id).neq("status", "inactive").order("table_number");
+      if (error) throw error;
+      return data ?? [];
     },
     enabled: !!branch,
   });
 
-  const { data: dishes } = useQuery({
-    queryKey: ["dishes-waiter", branch?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("dishes").select("*, categories(name)").eq("org_id", staff!.org_id).eq("is_active", true).order("name");
-      return data || [];
-    },
-    enabled: !!staff,
-  });
-
-  const markServed = useMutation({
-    mutationFn: async (orderId: string) => {
-      const { error } = await supabase.from("orders").update({ status: "served" }).eq("id", orderId);
-      if (error) throw error;
-    },
-    onSuccess: () => { refetch(); toast.success("Marked as served"); },
-  });
-
-  const addToCart = (dish: Dish) => {
-    setCart(prev => ({
-      ...prev,
-      [dish.id]: prev[dish.id] ? { ...prev[dish.id], qty: prev[dish.id].qty + 1 } : { name: dish.name, qty: 1, price: dish.price },
-    }));
-  };
-
-  const removeFromCart = (id: string) => {
-    setCart(prev => {
-      const copy = { ...prev };
-      if (copy[id]?.qty > 1) copy[id] = { ...copy[id], qty: copy[id].qty - 1 };
-      else delete copy[id];
-      return copy;
+  const visibleDishes = useMemo(() => {
+    return (menu.data?.dishes ?? []).filter((dish) => {
+      if (!dish.is_active) return false;
+      if (search && !dish.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (categoryId !== "all" && dish.category_id !== categoryId) return false;
+      return true;
     });
-  };
+  }, [categoryId, menu.data?.dishes, search]);
 
-  const cartTotal = Object.values(cart).reduce((s, i) => s + i.price * i.qty, 0);
-  const cartCount = Object.values(cart).reduce((s, i) => s + i.qty, 0);
+  const subtotal = items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
+  const totals = calculateTotals(subtotal, Number(organization?.default_tax_percent ?? 5), Boolean(organization?.tax_inclusive ?? true));
 
-  const placeOrder = async () => {
-    if (!selectedTable || cartCount === 0) return;
-    setPlacing(true);
-    try {
-      const taxPercent = organization?.default_tax_percent ?? 0;
-      const taxInclusive = organization?.tax_inclusive ?? true;
-      const { subtotal, taxAmount, total } = calculateTax(cartTotal, taxPercent, taxInclusive);
+  const createOrder = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branchId: branch!.id,
+          tableNumber,
+          customerName,
+          waiterId: staff?.id,
+          orderSource: "waiter",
+          orderType: tableNumber ? "dine_in" : "takeaway",
+          notes,
+          items: items.map((item) => ({
+            dish_id: item.dish_id,
+            dish_name: item.dish_name,
+            quantity: item.quantity,
+            price_at_order: item.unit_price,
+            notes: item.notes,
+          })),
+        }),
+      });
+      const payload = (await response.json()) as { error?: string; order?: { id: string; order_number: string } };
+      if (!response.ok) throw new Error(payload.error ?? "Unable to create order");
+      return payload.order;
+    },
+    onSuccess: async (order) => {
+      setItems([]);
+      setCustomerName("");
+      setNotes("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] }),
+        queryClient.invalidateQueries({ queryKey: ["tables"] }),
+      ]);
+      toast.success(order ? `Order #${order.order_number} sent` : "Order sent");
+    },
+    onError: (error) => toast.error(error.message),
+  });
 
-      const orderNumber = generateOrderNumber();
-      const { data: order, error } = await supabase.from("orders").insert({
-        order_number: orderNumber, branch_id: branch!.id,
-        table_number: selectedTable, waiter_id: staff!.id,
-        order_type: "dine_in", status: "pending",
-        subtotal, tax: taxAmount, total,
-      }).select().single();
-      if (error) throw error;
-
-      const items = Object.entries(cart).map(([id, item]) => ({
-        order_id: order.id, branch_id: branch!.id, dish_id: id,
-        dish_name: item.name, quantity: item.qty, price_at_order: item.price,
-      }));
-      await supabase.from("order_items").insert(items);
-
-      // Mark the table as occupied now that an order has been placed.
-      await supabase
-        .from("tables")
-        .update({ status: "occupied" })
-        .eq("branch_id", branch!.id)
-        .eq("table_number", selectedTable);
-
-      toast.success(`Order #${orderNumber} placed for Table ${selectedTable}`);
-      setCart({}); setOrderDialog(false); setSelectedTable(null); refetch();
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err));
-    } finally {
-      setPlacing(false);
+  const addDish = (dishId: string) => {
+    const dish = menu.data?.dishes.find((item) => item.id === dishId);
+    if (!dish) return;
+    const existing = items.find((item) => item.dish_id === dish.id);
+    if (existing) {
+      setItems(items.map((item) => (item.dish_id === dish.id ? { ...item, quantity: item.quantity + 1 } : item)));
+      return;
     }
+    setItems([...items, { dish_id: dish.id, dish_name: dish.name, unit_price: Number(dish.price), quantity: 1, image_url: dish.image_url, is_veg: dish.is_veg }]);
   };
 
-  const activeOrders = orders?.filter(o => ["pending", "confirmed", "preparing", "ready"].includes(o.status)) || [];
-  const filteredDishes = dishes?.filter(d => !search || d.name.toLowerCase().includes(search.toLowerCase())) || [];
+  const decrement = (dishId: string) => {
+    const existing = items.find((item) => item.dish_id === dishId);
+    if (!existing) return;
+    if (existing.quantity <= 1) {
+      setItems(items.filter((item) => item.dish_id !== dishId));
+      return;
+    }
+    setItems(items.map((item) => (item.dish_id === dishId ? { ...item, quantity: item.quantity - 1 } : item)));
+  };
+
+  const tableStats = tableCounts(tables.data ?? []);
 
   return (
     <div className="space-y-5">
-      <SectionHeader title="Waiter View" description="Take orders and manage tables" badge="WAITER" />
-
-      {/* Table selection grid */}
-      <div>
-        <h3 className="text-sm font-semibold mb-3">Select Table to Order</h3>
-        <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
-          {tables?.map(table => {
-            const hasOrders = activeOrders.some(o => o.table_number === table.table_number);
-            return (
-              <Button
-                key={table.id}
-                variant={selectedTable === table.table_number ? "default" : hasOrders ? "secondary" : "outline"}
-                size="sm"
-                className={`h-12 text-sm font-bold relative ${hasOrders && selectedTable !== table.table_number ? "border-amber-300" : ""}`}
-                onClick={() => { setSelectedTable(table.table_number); setOrderDialog(true); }}
-              >
-                {table.table_number}
-                {hasOrders && <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-amber-400 animate-pulse" />}
-              </Button>
-            );
-          })}
-        </div>
+      <PageHeader
+        title="Waiter POS"
+        description="Create table orders quickly without leaving the dining floor."
+        actions={
+          <Button disabled={!items.length || createOrder.isPending} onClick={() => createOrder.mutate()}>
+            <Send className="h-4 w-4" />
+            Send to kitchen
+          </Button>
+        }
+      />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard label="Available tables" value={tableStats.available} icon={Table2} tone="success" />
+        <StatCard label="Occupied tables" value={tableStats.occupied} icon={Armchair} tone="warning" />
+        <StatCard label="Cart items" value={items.reduce((sum, item) => sum + item.quantity, 0)} icon={ShoppingBag} />
       </div>
-
-      {/* Active orders */}
-      <div>
-        <h3 className="text-sm font-semibold mb-3">Active Orders ({activeOrders.length})</h3>
-        {activeOrders.length === 0 ? (
-          <EmptyState icon={ClipboardList} title="No active orders" description="Select a table above to create an order" className="py-8" />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {activeOrders.slice(0, 10).map((order, i) => (
-              <motion.div key={order.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-                <Card className="card-hover">
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-primary">#{order.order_number}</span>
-                        {order.table_number && <Badge variant="outline" className="text-[9px] h-4">Table {order.table_number}</Badge>}
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                        <Clock className="h-2.5 w-2.5" /> {timeAgo(order.created_at)}
-                      </div>
-                    </div>
-                    <div className="space-y-1 mb-2">
-                      {order.order_items?.slice(0, 3).map((item: OrderItem) => (
-                        <p key={item.id} className="text-xs text-muted-foreground"><span className="font-medium text-foreground">{item.quantity}×</span> {item.dish_name}</p>
-                      ))}
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <Badge variant="outline" className="text-[10px] capitalize">{order.status}</Badge>
-                      {order.status === "ready" && (
-                        <Button size="sm" className="h-7 text-[10px]" onClick={() => markServed.mutate(order.id)}>
-                          <Check className="h-3 w-3 mr-1" /> Mark Served
-                        </Button>
-                      )}
-                      <span className="text-xs font-bold">{formatCurrency(Number(order.total))}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="space-y-4">
+          <div className="grid gap-2 rounded-2xl border bg-card p-3 md:grid-cols-[220px_minmax(0,1fr)_220px]">
+            <Select value={tableNumber?.toString() ?? ""} onChange={(event) => setTableNumber(event.target.value ? Number(event.target.value) : null)}>
+              <option value="">Takeaway / no table</option>
+              {tables.data?.map((table) => (
+                <option key={table.id} value={table.table_number}>
+                  Table {table.table_number} {table.status !== "available" ? `(${table.status})` : ""}
+                </option>
+              ))}
+            </Select>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input className="pl-9" placeholder="Search dishes" value={search} onChange={(event) => setSearch(event.target.value)} />
+            </div>
+            <Select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+              <option value="all">All categories</option>
+              {menu.data?.categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </Select>
           </div>
-        )}
-      </div>
-
-      {/* New Order Dialog */}
-      <Dialog open={orderDialog} onOpenChange={(open) => { setOrderDialog(open); if (!open) setCart({}); }}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="text-sm">New Order — Table {selectedTable}</DialogTitle>
-          </DialogHeader>
-          <div className="relative mb-3">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input className="h-9 pl-9 text-xs" placeholder="Search dishes..." value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-          <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
-            {filteredDishes.map(dish => {
-              const qty = cart[dish.id]?.qty || 0;
-              return (
-                <div key={dish.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      {dish.is_veg ? <span className="h-3 w-3 rounded-sm border border-green-500 flex items-center justify-center"><span className="h-1.5 w-1.5 rounded-full bg-green-500" /></span>
-                        : <span className="h-3 w-3 rounded-sm border border-red-500 flex items-center justify-center"><span className="h-1.5 w-1.5 rounded-full bg-red-500" /></span>}
-                      <span className="text-xs font-medium truncate">{dish.name}</span>
-                    </div>
-                    <span className="text-[10px] text-primary font-medium">{formatCurrency(dish.price)}</span>
-                  </div>
-                  {qty > 0 ? (
-                    <div className="flex items-center gap-1.5">
-                      <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => removeFromCart(dish.id)}><Minus className="h-3 w-3" /></Button>
-                      <span className="w-5 text-center text-xs font-bold">{qty}</span>
-                      <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => addToCart(dish)}><Plus className="h-3 w-3" /></Button>
-                    </div>
-                  ) : (
-                    <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => addToCart(dish)}>Add</Button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          {cartCount > 0 && (
-            <div className="border-t border-border pt-3 mt-3 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">{cartCount} items</span>
-                <span className="font-bold text-primary">{formatCurrency(cartTotal)}</span>
-              </div>
-              <Button className="w-full h-10 text-sm" onClick={placeOrder} disabled={placing}>
-                {placing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShoppingBag className="h-4 w-4 mr-2" />}
-                Place Order
-              </Button>
+          {menu.isLoading ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              {Array.from({ length: 8 }).map((_, index) => (
+                <Skeleton key={index} className="h-32" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {visibleDishes.map((dish) => (
+                <DishTile
+                  key={dish.id}
+                  dish={dish}
+                  quantity={items.find((item) => item.dish_id === dish.id)?.quantity ?? 0}
+                  onAdd={() => addDish(dish.id)}
+                  onRemove={() => decrement(dish.id)}
+                />
+              ))}
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+        </section>
+        <aside className="space-y-3">
+          <div className="space-y-3 rounded-2xl border bg-card p-4">
+            <Input placeholder="Customer name optional" value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
+            <Textarea placeholder="Order notes for kitchen" value={notes} onChange={(event) => setNotes(event.target.value)} />
+          </div>
+          <CartPanel
+            items={items}
+            subtotal={subtotal}
+            tax={totals.tax}
+            total={totals.total}
+            submitLabel="Send to kitchen"
+            submitting={createOrder.isPending}
+            disabled={!branch}
+            onIncrement={addDish}
+            onDecrement={decrement}
+            onRemove={(dishId) => setItems(items.filter((item) => item.dish_id !== dishId))}
+            onNotes={(dishId, value) => setItems(items.map((item) => (item.dish_id === dishId ? { ...item, notes: value } : item)))}
+            onSubmit={() => createOrder.mutate()}
+          />
+        </aside>
+      </div>
     </div>
   );
+}
+
+function tableCounts(tables: RestaurantTable[]) {
+  return {
+    available: tables.filter((table) => table.status === "available").length,
+    occupied: tables.filter((table) => table.status === "occupied").length,
+  };
 }

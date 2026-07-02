@@ -1,172 +1,138 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/hooks/use-auth";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSupabase } from "@/hooks/use-supabase";
-import { SectionHeader } from "@/components/common/section-header";
-import { EmptyState } from "@/components/common/empty-state";
-import { ConfirmDialog } from "@/components/common/confirm-dialog";
-import { Card, CardContent } from "@/components/ui/card";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Edit2, Plus, Shield, Trash2, Users } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "sonner";
-import { motion } from "framer-motion";
-import { Plus, Users, UserPlus, Pencil, Trash2, Loader2, Shield } from "lucide-react";
-import { getErrorMessage } from "@/lib/errors";
-import type { Staff, StaffRole } from "@/lib/supabase/types";
+import { EmptyState } from "@/components/shared/empty-state";
+import { PageHeader } from "@/components/shared/page-header";
+import { createClient } from "@/lib/supabase/client";
+import { roleLabels, roles, type Role } from "@/lib/constants";
+import { initials } from "@/lib/utils";
+import { useAuth } from "@/features/auth/auth-provider";
+import type { Staff } from "@/types/database";
 
-const ROLES = ["owner", "admin", "manager", "waiter", "kitchen", "cashier"] as const;
-const ROLE_COLORS: Record<string, string> = {
-  owner: "bg-purple-100 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400",
-  admin: "bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400",
-  manager: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary",
-  waiter: "bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400",
-  kitchen: "bg-orange-100 text-orange-700 dark:bg-orange-950/30 dark:text-orange-400",
-  cashier: "bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400",
-};
+const emptyForm = { full_name: "", email: "", phone: "", role: "waiter" as Role };
 
 export default function StaffPage() {
   const { organization, branch, staff: currentStaff } = useAuth();
-  const supabase = useSupabase();
+  const [supabase] = useState(() => createClient());
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Staff | null>(null);
-  const [form, setForm] = useState({ full_name: "", email: "", phone: "", role: "waiter" as StaffRole });
-  const [saving, setSaving] = useState(false);
-  const [roleFilter, setRoleFilter] = useState("all");
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Role | "all">("all");
+  const [form, setForm] = useState(emptyForm);
 
-  const { data: staffList, isLoading } = useQuery({
+  const staff = useQuery({
     queryKey: ["staff", organization?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("staff").select("*").eq("org_id", organization!.id).order("created_at");
-      return data || [];
+      const { data, error } = await supabase.from("staff").select("*").eq("org_id", organization!.id).order("created_at");
+      if (error) throw error;
+      return data ?? [];
     },
     enabled: !!organization,
   });
 
-  const save = async () => {
-    setSaving(true);
-    try {
+  const save = useMutation({
+    mutationFn: async () => {
       if (editing) {
-        const { error } = await supabase.from("staff").update({ full_name: form.full_name, email: form.email, phone: form.phone, role: form.role }).eq("id", editing.id);
+        const { error } = await supabase.from("staff").update(form).eq("id", editing.id);
         if (error) throw error;
-      } else {
-        const { error } = await supabase.from("staff").insert({
-          org_id: organization!.id, branch_id: branch?.id || null,
-          full_name: form.full_name, email: form.email,
-          phone: form.phone || null, role: form.role,
-        });
-        if (error) throw error;
+        return;
       }
-      queryClient.invalidateQueries({ queryKey: ["staff"] });
-      setDialogOpen(false); setEditing(null);
-      toast.success(editing ? "Staff updated" : "Staff invited");
-    } catch (err: unknown) { toast.error(getErrorMessage(err)); } finally { setSaving(false); }
-  };
+      const { error } = await supabase.from("staff").insert({ ...form, org_id: organization!.id, branch_id: branch?.id ?? null });
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["staff"] });
+      setDialogOpen(false);
+      setEditing(null);
+      setForm(emptyForm);
+      toast.success(editing ? "Staff updated" : "Staff added");
+    },
+    onError: (error) => toast.error(error.message),
+  });
 
-  const deleteStaff = useMutation({
+  const remove = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("staff").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["staff"] }); toast.success("Staff removed"); },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["staff"] }),
   });
 
-  const filtered = staffList?.filter(s => roleFilter === "all" || s.role === roleFilter) || [];
+  const filtered = staff.data?.filter((member) => filter === "all" || member.role === filter) ?? [];
+
+  const edit = (member: Staff) => {
+    setEditing(member);
+    setForm({ full_name: member.full_name ?? "", email: member.email ?? "", phone: member.phone ?? "", role: member.role });
+    setDialogOpen(true);
+  };
 
   return (
     <div className="space-y-5">
-      <SectionHeader
-        title="Staff"
-        description={`${staffList?.length || 0} team members`}
-        actions={
-          <Button size="sm" className="h-9 text-xs" onClick={() => { setEditing(null); setForm({ full_name: "", email: "", phone: "", role: "waiter" }); setDialogOpen(true); }}>
-            <UserPlus className="h-3.5 w-3.5 mr-1" /> Invite Staff
-          </Button>
-        }
-      />
-
-      {/* Role filter */}
-      <div className="flex gap-2 flex-wrap">
-        {["all", ...ROLES].map(r => (
-          <button key={r} onClick={() => setRoleFilter(r)}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-medium capitalize transition-colors ${roleFilter === r ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
-            {r === "all" ? "All" : r} {r !== "all" && `(${staffList?.filter(s => s.role === r).length || 0})`}
+      <PageHeader title="Staff" description="Assign focused roles for each part of service." actions={<Button onClick={() => { setEditing(null); setForm(emptyForm); setDialogOpen(true); }}><Plus className="h-4 w-4" />Add staff</Button>} />
+      <div className="flex flex-wrap gap-2">
+        {(["all", ...roles] as Array<Role | "all">).map((role) => (
+          <button key={role} onClick={() => setFilter(role)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${filter === role ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-secondary"}`}>
+            {role === "all" ? "All" : roleLabels[role]}
           </button>
         ))}
       </div>
-
-      {isLoading ? (
-        <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
-      ) : filtered.length > 0 ? (
+      {staff.isLoading ? (
+        <div className="space-y-2">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-16" />)}</div>
+      ) : filtered.length ? (
         <div className="space-y-2">
-          {filtered.map((member, i) => (
-            <motion.div key={member.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-              <Card className="card-hover">
-                <CardContent className="p-3 flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
-                    {member.full_name?.charAt(0).toUpperCase() || "?"}
+          {filtered.map((member) => (
+            <Card key={member.id}>
+              <CardContent className="flex items-center gap-3 p-3">
+                <div className="font-numbers flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{initials(member.full_name)}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-medium">{member.full_name || "Unnamed"}</p>
+                    {member.id === currentStaff?.id ? <Badge variant="outline">You</Badge> : null}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{member.full_name || "Unnamed"}</span>
-                      {member.id === currentStaff?.id && <Badge variant="outline" className="text-[8px] h-4">You</Badge>}
-                    </div>
-                    <p className="text-[10px] text-muted-foreground">{member.email}</p>
+                  <p className="truncate text-xs text-muted-foreground">{member.email}</p>
+                </div>
+                <Badge><Shield className="h-3 w-3" />{roleLabels[member.role]}</Badge>
+                {member.id !== currentStaff?.id ? (
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => edit(member)}><Edit2 className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => remove.mutate(member.id)}><Trash2 className="h-4 w-4" /></Button>
                   </div>
-                  <Badge className={`text-[10px] h-5 capitalize ${ROLE_COLORS[member.role] || ""}`}>
-                    <Shield className="h-2.5 w-2.5 mr-1" /> {member.role}
-                  </Badge>
-                  <Badge variant={member.is_active ? "default" : "secondary"} className="text-[9px] h-4">{member.is_active ? "Active" : "Inactive"}</Badge>
-                  {member.id !== currentStaff?.id && (
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { setEditing(member); setForm({ full_name: member.full_name || "", email: member.email || "", phone: member.phone || "", role: member.role }); setDialogOpen(true); }}><Pencil className="h-3.5 w-3.5" /></Button>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive" onClick={() => setConfirmDeleteId(member.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
+                ) : null}
+              </CardContent>
+            </Card>
           ))}
         </div>
       ) : (
-        <EmptyState icon={Users} title="No staff members" actionLabel="Invite Staff" onAction={() => setDialogOpen(true)} />
+        <EmptyState icon={Users} title="No staff found" description="Invite or create staff records for service roles." actionLabel="Add staff" onAction={() => setDialogOpen(true)} />
       )}
-
-      <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setEditing(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle className="text-sm">{editing ? "Edit" : "Invite"} Staff</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5"><Label className="text-xs">Full Name</Label><Input className="h-9 text-xs" value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} /></div>
-            <div className="space-y-1.5"><Label className="text-xs">Email</Label><Input className="h-9 text-xs" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
-            <div className="space-y-1.5"><Label className="text-xs">Phone</Label><Input className="h-9 text-xs" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Role</Label>
-              <select className="w-full h-9 text-xs border rounded-md px-2 bg-transparent" value={form.role} onChange={e => setForm({ ...form, role: e.target.value as StaffRole })}>
-                {ROLES.filter(r => r !== "owner").map(r => <option key={r} value={r} className="capitalize">{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
-              </select>
-            </div>
-            <Button className="w-full h-9 text-xs" onClick={save} disabled={saving || !form.full_name || !form.email}>
-              {saving && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />} {editing ? "Update" : "Invite"}
-            </Button>
-          </div>
-        </DialogContent>
+      <Dialog open={dialogOpen} title={editing ? "Edit staff" : "Add staff"} onOpenChange={setDialogOpen}>
+        <div className="space-y-3">
+          <Field label="Full name"><Input value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} /></Field>
+          <Field label="Email"><Input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field>
+          <Field label="Phone"><Input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></Field>
+          <Field label="Role">
+            <Select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as Role })}>
+              {roles.filter((role) => role !== "owner").map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}
+            </Select>
+          </Field>
+          <Button className="w-full" disabled={!form.full_name || !form.email || save.isPending} onClick={() => save.mutate()}>{editing ? "Save staff" : "Add staff"}</Button>
+        </div>
       </Dialog>
-
-      <ConfirmDialog
-        open={!!confirmDeleteId}
-        onOpenChange={(open) => { if (!open) setConfirmDeleteId(null); }}
-        title="Remove staff member?"
-        description="This will permanently remove this staff member from your organisation. This action cannot be undone."
-        confirmLabel="Remove"
-        onConfirm={() => { if (confirmDeleteId) deleteStaff.mutate(confirmDeleteId); }}
-      />
     </div>
   );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="space-y-1.5"><Label>{label}</Label>{children}</div>;
 }

@@ -4,101 +4,73 @@ import { persist } from "zustand/middleware";
 export interface CartItem {
   dish_id: string;
   dish_name: string;
-  dish_image_url?: string | null;
-  quantity: number;
   unit_price: number;
+  quantity: number;
   notes?: string;
+  image_url?: string | null;
   is_veg?: boolean;
 }
 
-interface CartStore {
-  items: CartItem[];
+interface CartState {
   branchId: string | null;
-  tableId: string | null;
-  customerName: string;
-  customerPhone: string;
-  orderType: "dine_in" | "takeaway" | "delivery";
-  notes: string;
+  tableNumber: number | null;
+  items: CartItem[];
+  setContext: (branchId: string, tableNumber: number) => void;
   addItem: (item: Omit<CartItem, "quantity"> & { quantity?: number }) => void;
   removeItem: (dishId: string) => void;
   updateQuantity: (dishId: string, quantity: number) => void;
-  updateItemNotes: (dishId: string, notes: string) => void;
-  clearCart: () => void;
-  setOrderMeta: (meta: Partial<Pick<CartStore, "branchId" | "tableId" | "customerName" | "customerPhone" | "orderType" | "notes">>) => void;
-  getSubtotal: () => number;
-  getItemCount: () => number;
+  updateNotes: (dishId: string, notes: string) => void;
+  clear: () => void;
+  count: () => number;
+  subtotal: () => number;
 }
 
-export const useCartStore = create<CartStore>()(
+export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
-      items: [],
       branchId: null,
-      tableId: null,
-      customerName: "",
-      customerPhone: "",
-      orderType: "dine_in",
-      notes: "",
-
+      tableNumber: null,
+      items: [],
+      setContext: (branchId, tableNumber) => {
+        const state = get();
+        if (state.branchId !== branchId || state.tableNumber !== tableNumber) {
+          set({ branchId, tableNumber, items: [] });
+          return;
+        }
+        set({ branchId, tableNumber });
+      },
       addItem: (item) => {
-        const items = get().items;
-        const existing = items.find((i) => i.dish_id === item.dish_id);
-        if (existing) {
-          set({
-            items: items.map((i) =>
-              i.dish_id === item.dish_id
-                ? { ...i, quantity: i.quantity + (item.quantity || 1) }
-                : i
-            ),
-          });
-        } else {
-          set({ items: [...items, { ...item, quantity: item.quantity || 1 }] });
+        const quantity = item.quantity ?? 1;
+        const existing = get().items.find((current) => current.dish_id === item.dish_id);
+        if (!existing) {
+          set({ items: [...get().items, { ...item, quantity }] });
+          return;
         }
-      },
-
-      removeItem: (dishId) => {
-        set({ items: get().items.filter((i) => i.dish_id !== dishId) });
-      },
-
-      updateQuantity: (dishId, quantity) => {
-        if (quantity <= 0) {
-          set({ items: get().items.filter((i) => i.dish_id !== dishId) });
-        } else {
-          set({
-            items: get().items.map((i) =>
-              i.dish_id === dishId ? { ...i, quantity } : i
-            ),
-          });
-        }
-      },
-
-      updateItemNotes: (dishId, notes) => {
         set({
-          items: get().items.map((i) =>
-            i.dish_id === dishId ? { ...i, notes } : i
+          items: get().items.map((current) =>
+            current.dish_id === item.dish_id ? { ...current, quantity: current.quantity + quantity } : current
           ),
         });
       },
-
-      clearCart: () => {
+      removeItem: (dishId) => set({ items: get().items.filter((item) => item.dish_id !== dishId) }),
+      updateQuantity: (dishId, quantity) => {
+        if (quantity <= 0) {
+          get().removeItem(dishId);
+          return;
+        }
         set({
-          items: [],
-          customerName: "",
-          customerPhone: "",
-          notes: "",
+          items: get().items.map((item) => (item.dish_id === dishId ? { ...item, quantity } : item)),
         });
       },
-
-      setOrderMeta: (meta) => set(meta),
-
-      getSubtotal: () =>
-        get().items.reduce((sum, i) => sum + i.unit_price * i.quantity, 0),
-
-      getItemCount: () =>
-        get().items.reduce((sum, i) => sum + i.quantity, 0),
+      updateNotes: (dishId, notes) => {
+        set({
+          items: get().items.map((item) => (item.dish_id === dishId ? { ...item, notes } : item)),
+        });
+      },
+      clear: () => set({ items: [] }),
+      count: () => get().items.reduce((sum, item) => sum + item.quantity, 0),
+      subtotal: () => get().items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0),
     }),
-    {
-      name: "capp-cart",
-    }
+    { name: "capp-cart-v2" }
   )
 );

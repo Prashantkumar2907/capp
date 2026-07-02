@@ -1,297 +1,174 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useAuth } from "@/hooks/use-auth";
-import { useQuery } from "@tanstack/react-query";
-import { useSupabase } from "@/hooks/use-supabase";
-import { formatCurrency } from "@/lib/helpers";
-import { SectionHeader } from "@/components/common/section-header";
-import { StatCard } from "@/components/common/stat-card";
-import { EmptyState } from "@/components/common/empty-state";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Banknote, CheckCircle2, CreditCard, ExternalLink, IndianRupee, RefreshCw, Search } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import {
-  IndianRupee, CreditCard, Clock, CheckCircle2, XCircle,
-  TrendingUp, Smartphone, Banknote, Filter,
-} from "lucide-react";
-import { motion } from "framer-motion";
-import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-} from "recharts";
-import type { PaymentWithOrder } from "@/lib/domain";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/shared/empty-state";
+import { PageHeader } from "@/components/shared/page-header";
+import { StatCard } from "@/components/shared/stat-card";
+import { createClient } from "@/lib/supabase/client";
+import { formatCurrency, formatDateTime, upiLink } from "@/lib/utils";
+import { useAuth } from "@/features/auth/auth-provider";
+import type { Order, Payment } from "@/types/database";
 
-const METHOD_ICONS: Record<string, React.ReactNode> = {
-  upi: <Smartphone className="h-4.5 w-4.5" />,
-  razorpay: <CreditCard className="h-4.5 w-4.5" />,
-  cash: <Banknote className="h-4.5 w-4.5" />,
-  card: <CreditCard className="h-4.5 w-4.5" />,
-};
-
-const METHOD_COLORS: Record<string, string> = {
-  upi: "bg-violet-100 text-violet-700 dark:bg-violet-950/30 dark:text-violet-400",
-  razorpay: "bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400",
-  cash: "bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400",
-  card: "bg-orange-100 text-orange-700 dark:bg-orange-950/30 dark:text-orange-400",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  completed: "bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400",
-  pending: "bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400",
-  failed: "bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400",
-  refunded: "bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400",
-};
-
-const PIE_COLORS = ["#8b5cf6", "#3b82f6", "#22c55e", "#f97316"];
-
-type FilterStatus = "all" | "completed" | "pending" | "failed" | "refunded";
-type FilterMethod = "all" | "upi" | "razorpay" | "cash" | "card";
+type PaymentRow = Payment & { orders: Pick<Order, "order_number" | "table_number" | "customer_name" | "total" | "status"> | null };
+type PaymentStatusFilter = "all" | Payment["status"];
 
 export default function PaymentsPage() {
-  const { branch } = useAuth();
-  const supabase = useSupabase();
-  const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
-  const [methodFilter, setMethodFilter] = useState<FilterMethod>("all");
+  const { branch, organization } = useAuth();
+  const [supabase] = useState(() => createClient());
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<PaymentStatusFilter>("all");
 
-  const { data, isLoading } = useQuery({
+  const payments = useQuery({
     queryKey: ["payments", branch?.id],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("payments")
-        .select("*, orders(order_number, table_number)")
+        .select("*, orders(order_number, table_number, customer_name, total, status)")
         .eq("branch_id", branch!.id)
-        .order("created_at", { ascending: false })
-        .limit(200);
-      return (data || []) as PaymentWithOrder[];
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as PaymentRow[];
     },
     enabled: !!branch,
+    refetchInterval: 30000,
   });
 
-  const stats = useMemo(() => {
-    if (!data) return { collected: 0, pending: 0, failed: 0, total: 0 };
-    return {
-      collected: data.filter(p => p.status === "completed").reduce((s, p) => s + Number(p.amount), 0),
-      pending: data.filter(p => p.status === "pending").reduce((s, p) => s + Number(p.amount), 0),
-      failed: data.filter(p => p.status === "failed").length,
-      total: data.length,
-    };
-  }, [data]);
-
-  const methodBreakdown = useMemo(() => {
-    if (!data) return [];
-    const methods = ["upi", "razorpay", "cash", "card"] as const;
-    return methods
-      .map((method) => {
-        const items = data.filter(p => p.method === method && p.status === "completed");
-        return { name: method.toUpperCase(), value: items.reduce((s, p) => s + Number(p.amount), 0), count: items.length };
-      })
-      .filter(m => m.count > 0);
-  }, [data]);
-
-  // Group by day for bar chart (last 7 days)
-  const dailyTrend = useMemo(() => {
-    if (!data) return [];
-    const days: Record<string, number> = {};
-    const now = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(now.getDate() - i);
-      days[d.toLocaleDateString("en-IN", { month: "short", day: "numeric" })] = 0;
-    }
-    data.filter(p => p.status === "completed").forEach(p => {
-      const d = new Date(p.created_at);
-      const key = d.toLocaleDateString("en-IN", { month: "short", day: "numeric" });
-      if (key in days) days[key] += Number(p.amount);
-    });
-    return Object.entries(days).map(([date, amount]) => ({ date, amount }));
-  }, [data]);
+  const updatePayment = useMutation({
+    mutationFn: async ({ payment, nextStatus }: { payment: PaymentRow; nextStatus: Payment["status"] }) => {
+      const { error } = await supabase
+        .from("payments")
+        .update({ status: nextStatus, transaction_id: payment.transaction_id || `manual-${Date.now()}` })
+        .eq("id", payment.id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["payments"] });
+      toast.success("Payment updated");
+    },
+    onError: (error) => toast.error(error.message),
+  });
 
   const filtered = useMemo(() => {
-    if (!data) return [];
-    return data.filter(p => {
-      if (statusFilter !== "all" && p.status !== statusFilter) return false;
-      if (methodFilter !== "all" && p.method !== methodFilter) return false;
+    return (payments.data ?? []).filter((payment) => {
+      const haystack = `${payment.orders?.order_number ?? ""} ${payment.orders?.customer_name ?? ""} ${payment.transaction_id ?? ""}`.toLowerCase();
+      if (search && !haystack.includes(search.toLowerCase())) return false;
+      if (status !== "all" && payment.status !== status) return false;
       return true;
     });
-  }, [data, statusFilter, methodFilter]);
+  }, [payments.data, search, status]);
+
+  const stats = useMemo(() => {
+    const rows = payments.data ?? [];
+    return {
+      collected: rows.filter((payment) => payment.status === "completed").reduce((sum, payment) => sum + Number(payment.amount), 0),
+      pending: rows.filter((payment) => payment.status === "pending").reduce((sum, payment) => sum + Number(payment.amount), 0),
+      failed: rows.filter((payment) => payment.status === "failed").length,
+      count: rows.length,
+    };
+  }, [payments.data]);
 
   return (
     <div className="space-y-5">
-      <SectionHeader
+      <PageHeader
         title="Payments"
-        description={`${data?.length || 0} transactions`}
-        badge="Finance"
+        description="Cashier desk for UPI, cash, card, and Razorpay settlements."
         actions={
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as FilterStatus)}
-              className="text-xs h-8 rounded-lg border border-border bg-background px-2 pr-7 focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="all">All status</option>
-              <option value="completed">Completed</option>
-              <option value="pending">Pending</option>
-              <option value="failed">Failed</option>
-              <option value="refunded">Refunded</option>
-            </select>
-            <select
-              value={methodFilter}
-              onChange={(e) => setMethodFilter(e.target.value as FilterMethod)}
-              className="text-xs h-8 rounded-lg border border-border bg-background px-2 pr-7 focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="all">All methods</option>
-              <option value="upi">UPI</option>
-              <option value="razorpay">Razorpay</option>
-              <option value="cash">Cash</option>
-              <option value="card">Card</option>
-            </select>
-          </div>
+          <Button variant="secondary" onClick={() => void payments.refetch()}>
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
         }
       />
-
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Collected" value={stats.collected} prefix="₹" icon={CheckCircle2} delay={0} />
-        <StatCard label="Pending" value={stats.pending} prefix="₹" icon={Clock} delay={1} />
-        <StatCard label="Failed" value={stats.failed} icon={XCircle} delay={2} />
-        <StatCard label="Total Txns" value={stats.total} icon={TrendingUp} delay={3} />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Collected" value={formatCurrency(stats.collected)} icon={IndianRupee} tone="success" />
+        <StatCard label="Pending" value={formatCurrency(stats.pending)} icon={Banknote} tone="warning" />
+        <StatCard label="Failed" value={stats.failed} icon={CreditCard} tone="info" />
+        <StatCard label="Total records" value={stats.count} icon={CheckCircle2} />
       </div>
-
-      {/* Charts row */}
-      {!isLoading && (methodBreakdown.length > 0 || dailyTrend.some(d => d.amount > 0)) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Payment methods breakdown */}
-          {methodBreakdown.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold">Payment Methods</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-4">
-                    <ResponsiveContainer width={120} height={120}>
-                      <PieChart>
-                        <Pie data={methodBreakdown} dataKey="value" cx="50%" cy="50%" innerRadius={35} outerRadius={55} paddingAngle={3}>
-                          {methodBreakdown.map((_, i) => (
-                            <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(v: unknown) => formatCurrency(Number(v))}
-                          contentStyle={{ fontSize: 11, borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)" }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="flex-1 space-y-2">
-                      {methodBreakdown.map((m, i) => (
-                        <div key={m.name} className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="h-2 w-2 rounded-full" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
-                            <span className="text-xs text-muted-foreground">{m.name}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-xs font-semibold">{formatCurrency(m.value)}</span>
-                            <span className="text-[10px] text-muted-foreground ml-1">({m.count})</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-
-          {/* 7-day trend */}
-          {dailyTrend.some(d => d.amount > 0) && (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold">7-Day Revenue</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={120}>
-                    <BarChart data={dailyTrend} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
-                      <XAxis dataKey="date" tick={{ fontSize: 9 }} className="text-muted-foreground" tickLine={false} axisLine={false} />
-                      <YAxis tick={{ fontSize: 9 }} className="text-muted-foreground" tickLine={false} axisLine={false} tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`} />
-                      <Tooltip
-                        formatter={(v: unknown) => [formatCurrency(Number(v)), "Revenue"]}
-                        contentStyle={{ fontSize: 11, borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)" }}
-                      />
-                      <Bar dataKey="amount" className="fill-primary" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-64 flex-1 sm:max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input className="pl-9" placeholder="Search payment" value={search} onChange={(event) => setSearch(event.target.value)} />
         </div>
-      )}
-
-      {/* Transaction list */}
-      {isLoading ? (
-        <div className="space-y-2">{[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
-      ) : filtered && filtered.length > 0 ? (
+        <Select value={status} onChange={(event) => setStatus(event.target.value as PaymentStatusFilter)} className="w-48">
+          <option value="all">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="completed">Completed</option>
+          <option value="failed">Failed</option>
+          <option value="refunded">Refunded</option>
+        </Select>
+      </div>
+      {payments.isLoading ? (
         <div className="space-y-2">
-          {filtered.map((payment, i) => (
-            <motion.div
-              key={payment.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.015, duration: 0.25 }}
-            >
-              <Card className="card-hover">
-                <CardContent className="p-3 flex items-center gap-3">
-                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${METHOD_COLORS[payment.method] || "bg-muted text-muted-foreground"}`}>
-                    {METHOD_ICONS[payment.method] ?? <IndianRupee className="h-4.5 w-4.5" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold">
-                        #{payment.orders?.order_number || "—"}
-                      </span>
-                      {payment.orders?.table_number && (
-                        <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-md">
-                          Table {payment.orders.table_number}
-                        </span>
-                      )}
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} className="h-20" />
+          ))}
+        </div>
+      ) : filtered.length ? (
+        <div className="space-y-2">
+          {filtered.map((payment) => {
+            const upiHref =
+              branch?.upi_vpa && payment.status === "pending"
+                ? upiLink({ vpa: branch.upi_vpa, amount: Number(payment.amount), reference: payment.orders?.order_number ?? payment.id, merchant: organization?.name ?? branch.name })
+                : null;
+            return (
+              <Card key={payment.id}>
+                <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-numbers text-sm font-semibold">#{payment.orders?.order_number ?? payment.id.slice(0, 8)}</p>
+                      <PaymentBadge status={payment.status} />
+                      <Badge variant="secondary">{payment.method}</Badge>
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-0.5 capitalize">
-                      {payment.method} · {new Date(payment.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {payment.orders?.table_number ? `Table ${payment.orders.table_number} | ` : ""}
+                      {payment.orders?.customer_name || "Walk-in"} | {formatDateTime(payment.created_at)}
                     </p>
                   </div>
-                  <Badge className={`text-[10px] h-5 capitalize border-0 ${STATUS_COLORS[payment.status]}`}>
-                    {payment.status}
-                  </Badge>
-                  <span className="text-sm font-bold shrink-0 tabular-nums">
-                    {formatCurrency(Number(payment.amount))}
-                  </span>
+                  <p className="font-numbers text-lg font-semibold">{formatCurrency(payment.amount)}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {upiHref ? (
+                      <a href={upiHref}>
+                        <Button variant="outline" size="sm">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          UPI
+                        </Button>
+                      </a>
+                    ) : null}
+                    {payment.status !== "completed" ? (
+                      <Button size="sm" disabled={updatePayment.isPending} onClick={() => updatePayment.mutate({ payment, nextStatus: "completed" })}>
+                        Mark paid
+                      </Button>
+                    ) : null}
+                    {payment.status === "pending" ? (
+                      <Button variant="ghost" size="sm" disabled={updatePayment.isPending} onClick={() => updatePayment.mutate({ payment, nextStatus: "failed" })}>
+                        Mark failed
+                      </Button>
+                    ) : null}
+                  </div>
                 </CardContent>
               </Card>
-            </motion.div>
-          ))}
-          {filtered.length < (data?.length ?? 0) && (
-            <p className="text-center text-xs text-muted-foreground py-2">
-              Showing {filtered.length} of {data?.length} transactions
-            </p>
-          )}
+            );
+          })}
         </div>
       ) : (
-        <EmptyState
-          icon={CreditCard}
-          title={statusFilter !== "all" || methodFilter !== "all" ? "No matching payments" : "No payments yet"}
-          description={
-            statusFilter !== "all" || methodFilter !== "all"
-              ? "Try adjusting the filters above"
-              : "Payments will appear here as orders are completed"
-          }
-          actionLabel={statusFilter !== "all" || methodFilter !== "all" ? "Clear filters" : undefined}
-          onAction={statusFilter !== "all" || methodFilter !== "all" ? () => { setStatusFilter("all"); setMethodFilter("all"); } : undefined}
-        />
+        <EmptyState icon={CreditCard} title="No payments found" description="Payments are created automatically when orders are placed." />
       )}
     </div>
   );
+}
+
+function PaymentBadge({ status }: { status: Payment["status"] }) {
+  const variant = status === "completed" ? "success" : status === "pending" ? "warning" : status === "failed" ? "destructive" : "secondary";
+  return <Badge variant={variant}>{status}</Badge>;
 }

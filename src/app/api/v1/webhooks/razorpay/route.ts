@@ -1,137 +1,57 @@
-import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
-import { createServiceClient } from "@/lib/supabase/server";
-import { getErrorMessage, isRecord } from "@/lib/errors";
-import type { Json } from "@/lib/supabase/types";
+import { createHmac, timingSafeEqual } from "crypto";
+import { NextResponse, type NextRequest } from "next/server";
+import { createAdminSupabase } from "@/lib/supabase/admin";
 
-function signaturesMatch(expectedSignature: string, receivedSignature: string) {
-  try {
-    const expected = Buffer.from(expectedSignature, "hex");
-    const received = Buffer.from(receivedSignature, "hex");
-    return (
-      expected.length === received.length &&
-      crypto.timingSafeEqual(expected, received)
-    );
-  } catch {
-    return false;
-  }
-}
-
-function getNestedRecord(
-  value: Record<string, unknown>,
-  keys: string[]
-): Record<string, unknown> | null {
-  let current: unknown = value;
-  for (const key of keys) {
-    if (!isRecord(current) || !isRecord(current[key])) return null;
-    current = current[key] as Record<string, unknown>;
-  }
-  return current as Record<string, unknown>;
-}
-
-function getOrderIdFromPayment(payment: Record<string, unknown>) {
-  const notes = payment.notes;
-  if (!isRecord(notes) || typeof notes.order_id !== "string") return null;
-  return notes.order_id;
-}
+type RazorpayEvent = {
+  event: string;
+  payload?: {
+    payment?: {
+      entity?: {
+        id?: string;
+        amount?: number;
+        status?: string;
+        order_id?: string;
+        notes?: Record<string, string | undefined>;
+      };
+    };
+  };
+};
 
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.text();
-    const signature = request.headers.get("x-razorpay-signature");
+  const rawBody = await request.text();
+  const signature = request.headers.get("x-razorpay-signature");
+  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
-    if (!signature) {
-      return NextResponse.json({ error: "Missing signature" }, { status: 400 });
-    }
-
-    // Verify signature
-    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-    if (!webhookSecret) {
-      return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 });
-    }
-
-    const expectedSignature = crypto
-      .createHmac("sha256", webhookSecret)
-      .update(body)
-      .digest("hex");
-
-    if (!signaturesMatch(expectedSignature, signature)) {
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-    }
-
-    const event: unknown = JSON.parse(body);
-    if (!isRecord(event) || typeof event.event !== "string") {
-      return NextResponse.json({ error: "Invalid event payload" }, { status: 400 });
-    }
-
-    const supabase = await createServiceClient();
-
-    switch (event.event) {
-      case "payment.captured": {
-        const payment = getNestedRecord(event, ["payload", "payment", "entity"]);
-        if (!payment) break;
-        const orderId = getOrderIdFromPayment(payment);
-
-        if (!orderId) break;
-
-        // Update payment status
-        await supabase
-          .from("payments")
-          .update({
-            status: "completed",
-            transaction_id: typeof payment.id === "string" ? payment.id : null,
-            provider_data: payment as Json,
-          })
-          .eq("order_id", orderId)
-          .eq("status", "pending");
-
-        // Update order status to confirmed
-        await supabase
-          .from("orders")
-          .update({ status: "confirmed" })
-          .eq("id", orderId)
-          .eq("status", "pending");
-
-        break;
-      }
-
-      case "payment.failed": {
-        const payment = getNestedRecord(event, ["payload", "payment", "entity"]);
-        if (!payment) break;
-        const orderId = getOrderIdFromPayment(payment);
-
-        if (!orderId) break;
-
-        await supabase
-          .from("payments")
-          .update({
-            status: "failed",
-            transaction_id: typeof payment.id === "string" ? payment.id : null,
-            provider_data: payment as Json,
-          })
-          .eq("order_id", orderId)
-          .eq("status", "pending");
-
-        break;
-      }
-
-      case "refund.processed": {
-        const refund = getNestedRecord(event, ["payload", "refund", "entity"]);
-        const paymentId = refund?.payment_id;
-        if (typeof paymentId !== "string") break;
-
-        await supabase
-          .from("payments")
-          .update({ status: "refunded", provider_data: refund as Json })
-          .eq("transaction_id", paymentId);
-
-        break;
-      }
-    }
-
-    return NextResponse.json({ received: true });
-  } catch (error) {
-    console.error("Webhook error:", getErrorMessage(error));
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  if (webhookSecret && (!signature || !validSignature(rawBody, signature, webhookSecret))) {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
+
+  const event = JSON.parse(rawBody) as RazorpayEvent;
+  const payment = event.payload?.payment?.entity;
+
+  if (!payment?.id) {
+    return NextResponse.json({ ok: true });
+  }
+
+  const status = event.event === "payment.captured" || payment.status === "captured" ? "completed" : event.event === "payment.failed" || payment.status === "failed" ? "failed" : "pending";
+  const orderId = payment.notes?.capp_order_id;
+  const paymentId = payment.notes?.capp_payment_id;
+  const admin = createAdminSupabase();
+
+  if (paymentId) {
+    await admin.from("payments").update({ status, transaction_id: payment.id, provider_data: event }).eq("id", paymentId);
+  } else if (orderId) {
+    await admin.from("payments").update({ status, transaction_id: payment.id, provider_data: event }).eq("order_id", orderId);
+  } else if (payment.order_id) {
+    await admin.from("payments").update({ status, transaction_id: payment.id, provider_data: event }).eq("transaction_id", payment.order_id);
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
+function validSignature(body: string, signature: string, secret: string) {
+  const digest = createHmac("sha256", secret).update(body).digest("hex");
+  const actual = Buffer.from(signature);
+  const expected = Buffer.from(digest);
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }

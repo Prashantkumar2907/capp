@@ -1,25 +1,16 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Providers } from "@/components/providers";
+import { Providers } from "@/components/shared/providers";
 
 export const metadata: Metadata = {
-  title: "RestaurantOS - Restaurant Management Platform",
-  description:
-    "Complete restaurant management solution with QR ordering, real-time kitchen display, UPI payments, and multi-branch analytics.",
+  title: "CAPP Restaurant Operations",
+  description: "QR ordering, kitchen operations, payments, staff, and analytics for restaurants.",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="en"
-      className="h-full antialiased"
-      suppressHydrationWarning
-    >
-      <body className="min-h-full flex flex-col font-sans">
+    <html lang="en" suppressHydrationWarning>
+      <body>
         <Providers>{children}</Providers>
       </body>
     </html>
