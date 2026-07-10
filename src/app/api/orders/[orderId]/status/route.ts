@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
+import { requireStaff } from "@/lib/api/auth";
 import { orderStatuses, type OrderStatus } from "@/lib/constants";
 
 interface Params {
@@ -19,7 +20,26 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Invalid order status" }, { status: 400 });
   }
 
+  // Staff-only endpoint: kitchen/waiter/cashier/manager/admin/owner dashboards call this.
+  const guard = await requireStaff();
+  if (!guard.ok) return guard.response;
+
   const admin = createAdminSupabase();
+
+  // Scope: the order must belong to the caller's organization (via its branch).
+  const { data: existing } = await admin
+    .from("orders")
+    .select("id, branch_id, branches!inner(org_id)")
+    .eq("id", orderId)
+    .maybeSingle();
+
+  const orderOrgId = (existing?.branches as { org_id: string } | { org_id: string }[] | null | undefined);
+  const resolvedOrgId = Array.isArray(orderOrgId) ? orderOrgId[0]?.org_id : orderOrgId?.org_id;
+
+  if (!existing || resolvedOrgId !== guard.staff.orgId) {
+    return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  }
+
   const { data: order, error } = await admin.from("orders").update({ status: body.status }).eq("id", orderId).select("*").single();
 
   if (error || !order) {

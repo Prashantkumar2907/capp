@@ -6,7 +6,7 @@ import type {
   OrderItem,
   Organization,
   Payment,
-} from "@/lib/supabase/types";
+} from "@/types/database";
 
 export type BranchOrgSummary = Pick<
   Organization,

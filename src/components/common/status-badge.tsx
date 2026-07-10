@@ -1,10 +1,10 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
-  ORDER_STATUS_COLORS,
-  ORDER_STATUS_LABELS,
-  PAYMENT_STATUS_LABELS,
-  ITEM_STATUS_LABELS,
+  orderStatusColors,
+  orderStatusLabels,
+  paymentStatusLabels,
+  itemStatusLabels,
 } from "@/lib/constants";
 
 type StatusVariant = "order" | "payment" | "item";
@@ -36,17 +36,17 @@ function getConfig(variant: StatusVariant, status: string) {
     case "payment":
       return {
         color: PAYMENT_STATUS_COLORS[status] ?? "",
-        label: PAYMENT_STATUS_LABELS[status] ?? status,
+        label: paymentStatusLabels[status as keyof typeof paymentStatusLabels] ?? status,
       };
     case "item":
       return {
         color: ITEM_STATUS_COLORS[status] ?? "",
-        label: ITEM_STATUS_LABELS[status] ?? status,
+        label: itemStatusLabels[status as keyof typeof itemStatusLabels] ?? status,
       };
     default:
       return {
-        color: ORDER_STATUS_COLORS[status] ?? "",
-        label: ORDER_STATUS_LABELS[status] ?? status,
+        color: orderStatusColors[status as keyof typeof orderStatusColors] ?? "",
+        label: orderStatusLabels[status as keyof typeof orderStatusLabels] ?? status,
       };
   }
 }
