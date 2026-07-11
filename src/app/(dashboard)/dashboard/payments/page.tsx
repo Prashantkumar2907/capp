@@ -34,6 +34,7 @@ export default function PaymentsPage() {
   const [settling, setSettling] = useState<PaymentRow | null>(null);
   const [settleMethod, setSettleMethod] = useState<SettleMethod>("cash");
   const [tendered, setTendered] = useState("");
+  const [collectAmount, setCollectAmount] = useState("");
   const [zOpen, setZOpen] = useState(false);
 
   const payments = useQuery({
@@ -66,6 +67,29 @@ export default function PaymentsPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["payments"] });
       toast.success("Payment updated");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const settle = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/orders/${settling!.order_id}/split-payment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: Number(collectAmount), method: settleMethod }),
+      });
+      const payload = (await response.json()) as { error?: string; result?: { settled?: boolean; remaining?: number } };
+      if (!response.ok) throw new Error(payload.error ?? "Unable to record payment");
+      return payload.result;
+    },
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ["payments"] });
+      setSettling(null);
+      toast.success(
+        result?.settled
+          ? "Bill fully settled"
+          : `Payment recorded — ${formatCurrency(Number(result?.remaining ?? 0))} still due`
+      );
     },
     onError: (error) => toast.error(error.message),
   });
@@ -164,7 +188,7 @@ export default function PaymentsPage() {
                       </a>
                     ) : null}
                     {payment.status !== "completed" ? (
-                      <Button size="sm" disabled={updatePayment.isPending} onClick={() => { setSettleMethod("cash"); setTendered(""); setSettling(payment); }}>
+                      <Button size="sm" disabled={updatePayment.isPending} onClick={() => { setSettleMethod("cash"); setTendered(""); setCollectAmount(String(payment.amount)); setSettling(payment); }}>
                         Settle
                       </Button>
                     ) : null}
@@ -192,6 +216,15 @@ export default function PaymentsPage() {
               <span className="font-numbers text-lg font-semibold">{formatCurrency(Number(settling.amount))}</span>
             </div>
             <div className="space-y-1.5">
+              <Label>Collect now (lower it to split the bill)</Label>
+              <Input type="number" inputMode="numeric" value={collectAmount} onChange={(event) => setCollectAmount(event.target.value)} />
+              {Number(collectAmount) > 0 && Number(collectAmount) < Number(settling.amount) ? (
+                <p className="text-xs text-muted-foreground">
+                  Split payment — {formatCurrency(Number(settling.amount) - Number(collectAmount))} stays pending for the next method.
+                </p>
+              ) : null}
+            </div>
+            <div className="space-y-1.5">
               <Label>Payment method</Label>
               <div className="grid grid-cols-3 gap-1.5">
                 {(["cash", "upi", "card"] as SettleMethod[]).map((method) => (
@@ -205,13 +238,13 @@ export default function PaymentsPage() {
               <div className="space-y-1.5">
                 <Label>Cash received</Label>
                 <Input type="number" inputMode="numeric" placeholder="500" value={tendered} onChange={(event) => setTendered(event.target.value)} />
-                {Number(tendered) >= Number(settling.amount) ? (
+                {Number(tendered) >= Number(collectAmount) && Number(collectAmount) > 0 ? (
                   <p className="rounded-xl bg-success/10 px-3 py-2 text-sm font-medium text-success">
-                    Return change: {formatCurrency(Number(tendered) - Number(settling.amount))}
+                    Return change: {formatCurrency(Number(tendered) - Number(collectAmount))}
                   </p>
                 ) : tendered ? (
                   <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                    Short by {formatCurrency(Number(settling.amount) - Number(tendered))}
+                    Short by {formatCurrency(Number(collectAmount) - Number(tendered))}
                   </p>
                 ) : null}
               </div>
@@ -219,13 +252,15 @@ export default function PaymentsPage() {
             <Button
               className="w-full"
               size="lg"
-              disabled={updatePayment.isPending || (settleMethod === "cash" && Number(tendered) < Number(settling.amount))}
-              onClick={() => {
-                updatePayment.mutate({ payment: settling, nextStatus: "completed", method: settleMethod });
-                setSettling(null);
-              }}
+              disabled={
+                settle.isPending
+                || !(Number(collectAmount) > 0)
+                || Number(collectAmount) > Number(settling.amount)
+                || (settleMethod === "cash" && Number(tendered) < Number(collectAmount))
+              }
+              onClick={() => settle.mutate()}
             >
-              Confirm payment received
+              Confirm {formatCurrency(Number(collectAmount) || 0)} received
             </Button>
           </div>
         ) : null}

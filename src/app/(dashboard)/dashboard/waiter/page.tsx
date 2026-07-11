@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Armchair, ClipboardList, PlusCircle, Search, Send, ShoppingBag, Table2, Trash2 } from "lucide-react";
+import { Armchair, BadgePercent, ClipboardList, PlusCircle, Search, Send, ShoppingBag, Table2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,7 +30,7 @@ import type { DishWithRelations, RestaurantTable } from "@/types/database";
 type OrderMode = "dine_in" | "takeaway" | "counter";
 
 export default function WaiterPage() {
-  const { organization, branch, staff } = useAuth();
+  const { organization, branch, staff, hasRole } = useAuth();
   const [supabase] = useState(() => createClient());
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"new" | "open">("new");
@@ -43,6 +44,9 @@ export default function WaiterPage() {
   const [optionsDish, setOptionsDish] = useState<DishWithRelations | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
+  const [discountOpen, setDiscountOpen] = useState(false);
+  const [discountAmount, setDiscountAmount] = useState("");
+  const [discountReason, setDiscountReason] = useState("");
 
   const menu = useQuery({
     queryKey: ["menu", organization?.id],
@@ -211,6 +215,26 @@ export default function WaiterPage() {
       toast.error(err instanceof Error ? err.message : "Unable to remove item");
     } finally {
       setBusyItemId(null);
+    }
+  };
+
+  const applyDiscount = async () => {
+    if (!selectedOrder) return;
+    try {
+      const response = await fetch(`/api/orders/${selectedOrder.id}/discount`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: Number(discountAmount), reason: discountReason }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Unable to apply discount");
+      await refreshOrders();
+      setDiscountOpen(false);
+      setDiscountAmount("");
+      setDiscountReason("");
+      toast.success("Discount applied");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to apply discount");
     }
   };
 
@@ -384,10 +408,22 @@ export default function WaiterPage() {
                       </div>
                     ))}
                 </div>
+                {Number(selectedOrder.discount) > 0 ? (
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Discount</span>
+                    <span className="font-numbers">-{formatCurrency(Number(selectedOrder.discount))}</span>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between border-t pt-3">
                   <span className="text-sm font-medium">Total</span>
                   <span className="font-numbers text-sm font-semibold">{formatCurrency(Number(selectedOrder.total))}</span>
                 </div>
+                {hasRole("owner", "admin", "manager") ? (
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => { setDiscountAmount(String(Number(selectedOrder.discount) || "")); setDiscountOpen(true); }}>
+                    <BadgePercent className="h-4 w-4" />
+                    {Number(selectedOrder.discount) > 0 ? "Edit discount" : "Apply discount"}
+                  </Button>
+                ) : null}
                 <Badge variant="secondary" className="w-full justify-center py-1.5">
                   Tap dishes on the left to add to this order
                 </Badge>
@@ -398,6 +434,21 @@ export default function WaiterPage() {
           )}
         </aside>
       </div>
+      <Dialog open={discountOpen} title={`Discount — #${selectedOrder?.order_number ?? ""}`} onOpenChange={setDiscountOpen}>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Amount (₹)</label>
+            <Input type="number" inputMode="numeric" value={discountAmount} onChange={(event) => setDiscountAmount(event.target.value)} placeholder="50" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Reason (goes to the audit log)</label>
+            <Input value={discountReason} onChange={(event) => setDiscountReason(event.target.value)} placeholder="Regular customer" />
+          </div>
+          <Button className="w-full" disabled={!(Number(discountAmount) >= 0)} onClick={() => void applyDiscount()}>
+            Apply
+          </Button>
+        </div>
+      </Dialog>
       <DishOptionsDialog
         dish={optionsDish}
         open={!!optionsDish}

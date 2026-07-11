@@ -123,8 +123,10 @@ Exit criterion still open: one real restaurant runs a full service day.
 - [x] Cash settle: settle dialog with method picker + cash tendered/change calculation (blocks short payments); completing payment auto-assigns GST invoice number via DB trigger
 - [x] Z-report: day summary (cash-in-drawer/UPI/card split, settled count, pending) with print
 - [x] KOT thermal print: 80mm browser-print ticket (variant, addons, notes, counter token) from kitchen tickets — works with any thermal printer installed as a system printer
-- [ ] Split payments UI (schema already supports N payments/order)
-- [ ] Discounts (permission-gated, needs order_totals discount pass)
+- [x] Split payments: record_split_payment() — pending row tracks remaining due after completed partials; settle dialog collects any amount up to due (part cash + part UPI); invoice assigned on first completed payment; overpay blocked. API cashier-gated
+- [x] Discounts: order_totals_v3 discount pass (discount on ex-tax food value; SC + GST on discounted base; printed parts still sum); apply_discount() clamps + logs amount/reason to activity_logs; API manager-gated; waiter open-order panel has Apply/Edit discount for owner/admin/manager; recompute preserves discount on open-order edits
+
+**Phase 2 exit criterion MET (pending live click-through): a restaurant can legally hand a customer our bill and close the till.**
 Exit: a restaurant can legally hand a customer our bill.
 
 **Phase 3 — Scale features.**
