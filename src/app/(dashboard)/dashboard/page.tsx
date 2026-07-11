@@ -20,6 +20,7 @@ import { formatCurrency } from "@/lib/utils";
 import { type OrderStatus } from "@/lib/constants";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
 import { useAuth } from "@/features/auth/auth-provider";
+import { useT } from "@/lib/i18n";
 
 /**
  * The Counter — everything a small restaurant needs on one screen:
@@ -29,6 +30,7 @@ import { useAuth } from "@/features/auth/auth-provider";
  */
 export default function CounterPage() {
   const { branch, staff, organization, canAccess } = useAuth();
+  const t = useT();
   const supabase = createClient();
   const queryClient = useQueryClient();
   const { orders, loading: ordersLoading, refresh } = useRealtimeOrders(branch?.id);
@@ -75,7 +77,7 @@ export default function CounterPage() {
             <Link href="/dashboard/waiter">
               <Button size="lg">
                 <ShoppingBag className="h-4 w-4" />
-                New order
+                {t("action.newOrder")}
               </Button>
             </Link>
           ) : undefined
@@ -83,11 +85,11 @@ export default function CounterPage() {
       />
 
       <div className="grid gap-3 grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Today's earnings" value={formatCurrency(summary?.revenue ?? 0)} icon={IndianRupee} />
-        <StatCard label="Orders today" value={summary?.ordersToday ?? 0} icon={ShoppingBag} tone="info" />
-        <StatCard label="Active now" value={activeOrders.length} icon={Clock} tone="warning" />
+        <StatCard label={t("counter.todaysEarnings")} value={formatCurrency(summary?.revenue ?? 0)} icon={IndianRupee} />
+        <StatCard label={t("counter.ordersToday")} value={summary?.ordersToday ?? 0} icon={ShoppingBag} tone="info" />
+        <StatCard label={t("counter.activeNow")} value={activeOrders.length} icon={Clock} tone="warning" />
         <StatCard
-          label="Rating"
+          label={t("counter.rating")}
           value={summary?.averageRating ? summary.averageRating.toFixed(1) : "—"}
           icon={Star}
           tone="success"
@@ -100,10 +102,10 @@ export default function CounterPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold flex items-center gap-2">
               <ChefHat className="h-4 w-4" />
-              Live orders
+              {t("counter.liveOrders")}
             </h2>
             <Link href="/dashboard/orders" className="text-xs text-muted-foreground hover:text-foreground">
-              History →
+              {t("counter.history")} →
             </Link>
           </div>
           {ordersLoading ? (
@@ -126,8 +128,8 @@ export default function CounterPage() {
           ) : (
             <EmptyState
               icon={ShoppingBag}
-              title="No active orders"
-              description="New orders from QR scans and waiters appear here instantly."
+              title={t("counter.noActiveOrders")}
+              description={t("counter.noActiveOrdersHint")}
             />
           )}
         </section>
@@ -146,6 +148,7 @@ export default function CounterPage() {
  */
 function StockPanel() {
   const { branch, organization } = useAuth();
+  const t = useT();
   const supabase = createClient();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -191,12 +194,12 @@ function StockPanel() {
       <CardContent className="space-y-3 p-4">
         <div className="flex items-center gap-2">
           <PackageX className="h-4 w-4" />
-          <h2 className="text-sm font-semibold">Out of stock</h2>
+          <h2 className="text-sm font-semibold">{t("counter.outOfStock")}</h2>
         </div>
-        <p className="text-xs text-muted-foreground">Switch a dish off and it disappears from customer menus instantly.</p>
+        <p className="text-xs text-muted-foreground">{t("counter.outOfStockHint")}</p>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="pl-9 h-9" placeholder="Find dish" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <Input className="pl-9 h-9" placeholder={t("counter.findDish")} value={search} onChange={(event) => setSearch(event.target.value)} />
         </div>
         {isLoading ? (
           <div className="space-y-2">

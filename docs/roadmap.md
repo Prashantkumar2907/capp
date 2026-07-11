@@ -134,7 +134,9 @@ Exit: a restaurant can legally hand a customer our bill.
 - [x] Multi-branch analytics: owner/admin-only branch comparison (revenue bar chart + per-branch order counts over the selected window); auto-hides for single-branch orgs
 - [x] Table transfer + merge (13_table_operations.sql): move_order_table (frees old table only when nothing else runs on it, blocks occupied targets), merge_orders (items move to target, totals recomputed, source cancelled + pending payment failed + table freed, deadlock-safe lock ordering); waiter open-order panel gets Move table… / Merge into… selectors. DB-tested end to end
 - [x] WhatsApp scaffold: provider-abstracted sendWhatsApp (gupshup | meta | disabled default no-op), Indian phone normalization, fire-and-forget on order→ready with restaurant name + receipt link; env template added. BLOCKED ON: provider account + approved message templates for production
-- [ ] Hindi staff UI (next-intl string extraction — dedicated session, touches every file)
+- [x] Hindi staff UI: lightweight per-device i18n (src/lib/i18n.tsx) — localStorage locale so the kitchen tablet runs Hindi while the owner's phone stays English; no routing/middleware changes. en+hi dictionaries (~90 keys) covering nav, Counter, Kitchen board (columns/actions/stats/station chips), Waiter POS, order-status badges; missing keys fall back en→key so partial translation never breaks. Language picker in Settings. Localized the LIVE shared/status-badge (common/status-badge turned out to be dead code — nothing imports it). Remaining pages (menu/staff/settings/analytics admin surfaces) migrate incrementally with the same t() pattern
+
+**Phase 3 exit criterion: a 50+ cover restaurant runs on it — pending live pilot.**
 Exit: a 50+ cover restaurant runs on it.
 
 **Phase 4 — Monetization.**

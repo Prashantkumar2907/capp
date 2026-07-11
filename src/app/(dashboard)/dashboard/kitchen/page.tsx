@@ -17,17 +17,19 @@ import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { Select } from "@/components/ui/select";
 import { printKot } from "@/lib/print-kot";
+import { useT } from "@/lib/i18n";
 import type { OrderWithItems } from "@/types/database";
 
 const columns: Array<{ key: OrderStatus; title: string; action?: OrderStatus; actionLabel?: string }> = [
-  { key: "pending", title: "New", action: "confirmed", actionLabel: "Accept" },
-  { key: "confirmed", title: "Accepted", action: "preparing", actionLabel: "Start cooking" },
-  { key: "preparing", title: "Cooking", action: "ready", actionLabel: "Mark ready" },
-  { key: "ready", title: "Ready", action: "served", actionLabel: "Handed off" },
+  { key: "pending", title: "kitchen.newOrders", action: "confirmed", actionLabel: "action.accept" },
+  { key: "confirmed", title: "kitchen.accepted", action: "preparing", actionLabel: "action.startCooking" },
+  { key: "preparing", title: "kitchen.cooking", action: "ready", actionLabel: "action.markReady" },
+  { key: "ready", title: "kitchen.ready", action: "served", actionLabel: "Handed off" },
 ];
 
 export default function KitchenPage() {
   const { branch, organization } = useAuth();
+  const t = useT();
   const [supabaseClient] = useState(() => createClient());
   const [stationId, setStationId] = useState<string>("all");
   const stations = useQuery({
@@ -90,14 +92,14 @@ export default function KitchenPage() {
       />
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard label="Open tickets" value={kitchenOrders.length} icon={ChefHat} />
-        <StatCard label="Items in queue" value={itemCount} icon={Utensils} tone="warning" />
-        <StatCard label="Oldest ticket" value={oldest ? timeAgo(oldest.created_at) : "Clear"} icon={Timer} tone="success" />
+        <StatCard label={t("kitchen.itemsInQueue")} value={itemCount} icon={Utensils} tone="warning" />
+        <StatCard label={t("kitchen.oldestTicket")} value={oldest ? timeAgo(oldest.created_at) : t("kitchen.clear")} icon={Timer} tone="success" />
       </div>
       {stations.data?.length ? (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground">Station</span>
+          <span className="text-xs font-medium text-muted-foreground">{t("kitchen.station")}</span>
           <button onClick={() => setStationId("all")} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${stationId === "all" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-secondary"}`}>
-            All
+            {t("kitchen.all")}
           </button>
           {stations.data.map((station) => (
             <button key={station.id} onClick={() => setStationId(station.id)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${stationId === station.id ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-secondary"}`}>
@@ -122,7 +124,7 @@ export default function KitchenPage() {
               <section key={column.key} className="fill-container min-h-[480px] rounded-2xl border bg-secondary/40">
                 <header className="flex items-center justify-between border-b bg-card px-4 py-3">
                   <div>
-                    <h2 className="text-sm font-semibold">{column.title}</h2>
+                    <h2 className="text-sm font-semibold">{t(column.title)}</h2>
                     <p className="text-xs text-muted-foreground">{rows.length} tickets</p>
                   </div>
                   <OrderStatusBadge status={column.key} />
@@ -135,10 +137,10 @@ export default function KitchenPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="font-numbers text-sm font-semibold">
-                                {order.order_type === "counter" ? `Token ${order.order_number.split("-").pop()}` : `#${order.order_number}`}
+                                {order.order_type === "counter" ? `${t("kitchen.token")} ${order.order_number.split("-").pop()}` : `#${order.order_number}`}
                               </p>
                               <p className="mt-1 text-xs text-muted-foreground">
-                                {order.table_number ? `Table ${order.table_number} | ` : order.order_type === "takeaway" ? "Takeaway | " : order.order_type === "counter" ? "Counter | " : ""}
+                                {order.table_number ? `${t("kitchen.table")} ${order.table_number} | ` : order.order_type === "takeaway" ? `${t("kitchen.takeaway")} | ` : order.order_type === "counter" ? "Counter | " : ""}
                                 {timeAgo(order.created_at)}
                               </p>
                             </div>
@@ -174,7 +176,7 @@ export default function KitchenPage() {
                           </div>
                           {column.action ? (
                             <Button className="w-full" disabled={busyId === order.id} onClick={() => void updateStatus(order, column.action!)}>
-                              {column.actionLabel}
+                              {column.actionLabel ? t(column.actionLabel) : null}
                             </Button>
                           ) : null}
                         </CardContent>

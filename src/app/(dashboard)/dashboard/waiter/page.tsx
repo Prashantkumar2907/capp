@@ -24,6 +24,7 @@ import { getBranchMenu } from "@/lib/supabase/queries";
 import { calculateTotals, formatCurrency, timeAgo } from "@/lib/utils";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
 import { useAuth } from "@/features/auth/auth-provider";
+import { useT } from "@/lib/i18n";
 import { cartLineId, lineUnitTotal, type CartItem } from "@/stores/cart-store";
 import type { DishWithRelations, RestaurantTable } from "@/types/database";
 
@@ -31,6 +32,7 @@ type OrderMode = "dine_in" | "takeaway" | "counter";
 
 export default function WaiterPage() {
   const { organization, branch, staff, hasRole } = useAuth();
+  const t = useT();
   const [supabase] = useState(() => createClient());
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"new" | "open">("new");
@@ -265,13 +267,13 @@ export default function WaiterPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Waiter POS"
+        title={t("waiter.title")}
         description="Take new orders or add dishes to running tables."
         actions={
           tab === "new" ? (
             <Button disabled={!items.length || createOrder.isPending} onClick={() => createOrder.mutate()}>
               <Send className="h-4 w-4" />
-              Send to kitchen
+              {t("action.sendToKitchen")}
             </Button>
           ) : undefined
         }
@@ -279,18 +281,18 @@ export default function WaiterPage() {
       <div className="flex gap-2">
         <Button variant={tab === "new" ? "default" : "outline"} size="sm" onClick={() => setTab("new")}>
           <PlusCircle className="h-4 w-4" />
-          New order
+          {t("action.newOrder")}
         </Button>
         <Button variant={tab === "open" ? "default" : "outline"} size="sm" onClick={() => setTab("open")}>
           <ClipboardList className="h-4 w-4" />
-          Open orders {openOrders.length ? `(${openOrders.length})` : ""}
+          {t("waiter.openOrders")} {openOrders.length ? `(${openOrders.length})` : ""}
         </Button>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard label="Available tables" value={tableStats.available} icon={Table2} tone="success" />
-        <StatCard label="Occupied tables" value={tableStats.occupied} icon={Armchair} tone="warning" />
+        <StatCard label={t("waiter.availableTables")} value={tableStats.available} icon={Table2} tone="success" />
+        <StatCard label={t("waiter.occupiedTables")} value={tableStats.occupied} icon={Armchair} tone="warning" />
         <StatCard
-          label={tab === "new" ? "Cart items" : "Open orders"}
+          label={tab === "new" ? t("waiter.cartItems") : t("waiter.openOrders")}
           value={tab === "new" ? items.reduce((sum, item) => sum + item.quantity, 0) : openOrders.length}
           icon={ShoppingBag}
         />
@@ -301,13 +303,13 @@ export default function WaiterPage() {
             {tab === "new" ? (
               <div className="flex gap-2">
                 <Select className="w-32" value={orderMode} onChange={(event) => setOrderMode(event.target.value as OrderMode)}>
-                  <option value="dine_in">Dine-in</option>
-                  <option value="takeaway">Takeaway</option>
-                  <option value="counter">Counter</option>
+                  <option value="dine_in">{t("waiter.dineIn")}</option>
+                  <option value="takeaway">{t("waiter.takeaway")}</option>
+                  <option value="counter">{t("waiter.counter")}</option>
                 </Select>
                 {orderMode === "dine_in" ? (
                   <Select value={tableNumber?.toString() ?? ""} onChange={(event) => setTableNumber(event.target.value ? Number(event.target.value) : null)}>
-                    <option value="">Table…</option>
+                    <option value="">{t("waiter.pickTable")}</option>
                     {tables.data?.map((table) => (
                       <option key={table.id} value={table.table_number}>
                         T{table.table_number} {table.status !== "available" ? `(${table.status})` : ""}
@@ -318,7 +320,7 @@ export default function WaiterPage() {
               </div>
             ) : (
               <Select value={selectedOrderId ?? ""} onChange={(event) => setSelectedOrderId(event.target.value || null)}>
-                <option value="">Pick open order…</option>
+                <option value="">{t("waiter.pickOpenOrder")}</option>
                 {openOrders.map((order) => (
                   <option key={order.id} value={order.id}>
                     #{order.order_number} {order.table_number ? `· T${order.table_number}` : ""} · {formatCurrency(Number(order.total))}
@@ -328,7 +330,7 @@ export default function WaiterPage() {
             )}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Search dishes" value={search} onChange={(event) => setSearch(event.target.value)} />
+              <Input className="pl-9" placeholder={t("action.search")} value={search} onChange={(event) => setSearch(event.target.value)} />
             </div>
             <Select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
               <option value="all">All categories</option>
@@ -363,8 +365,8 @@ export default function WaiterPage() {
           {tab === "new" ? (
             <>
               <div className="space-y-3 rounded-2xl border bg-card p-4">
-                <Input placeholder="Customer name optional" value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
-                <Textarea placeholder="Order notes for kitchen" value={notes} onChange={(event) => setNotes(event.target.value)} />
+                <Input placeholder={t("waiter.customerName")} value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
+                <Textarea placeholder={t("waiter.orderNotes")} value={notes} onChange={(event) => setNotes(event.target.value)} />
               </div>
               <CartPanel
                 items={items}
@@ -372,7 +374,7 @@ export default function WaiterPage() {
                 tax={totals.tax}
             serviceCharge={totals.serviceCharge}
                 total={totals.total}
-                submitLabel="Send to kitchen"
+                submitLabel={t("action.sendToKitchen")}
                 submitting={createOrder.isPending}
                 disabled={!branch}
                 onIncrement={(lineId) => {
@@ -432,18 +434,18 @@ export default function WaiterPage() {
                 </div>
                 {Number(selectedOrder.discount) > 0 ? (
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Discount</span>
+                    <span>{t("waiter.discount")}</span>
                     <span className="font-numbers">-{formatCurrency(Number(selectedOrder.discount))}</span>
                   </div>
                 ) : null}
                 <div className="flex items-center justify-between border-t pt-3">
-                  <span className="text-sm font-medium">Total</span>
+                  <span className="text-sm font-medium">{t("waiter.total")}</span>
                   <span className="font-numbers text-sm font-semibold">{formatCurrency(Number(selectedOrder.total))}</span>
                 </div>
                 {hasRole("owner", "admin", "manager") ? (
                   <Button variant="outline" size="sm" className="w-full" onClick={() => { setDiscountAmount(String(Number(selectedOrder.discount) || "")); setDiscountOpen(true); }}>
                     <BadgePercent className="h-4 w-4" />
-                    {Number(selectedOrder.discount) > 0 ? "Edit discount" : "Apply discount"}
+                    {Number(selectedOrder.discount) > 0 ? t("waiter.editDiscount") : t("waiter.applyDiscount")}
                   </Button>
                 ) : null}
                 <div className="grid grid-cols-2 gap-2">
@@ -455,7 +457,7 @@ export default function WaiterPage() {
                       if (value) void tableAction({ action: "move", tableNumber: value });
                     }}
                   >
-                    <option value="">Move table…</option>
+                    <option value="">{t("waiter.moveTable")}</option>
                     {tables.data
                       ?.filter((table) => table.table_number !== selectedOrder.table_number)
                       .map((table) => (
@@ -471,7 +473,7 @@ export default function WaiterPage() {
                       if (event.target.value) void tableAction({ action: "merge", targetOrderId: event.target.value });
                     }}
                   >
-                    <option value="">Merge into…</option>
+                    <option value="">{t("waiter.mergeInto")}</option>
                     {openOrders
                       .filter((order) => order.id !== selectedOrder.id)
                       .map((order) => (
@@ -482,7 +484,7 @@ export default function WaiterPage() {
                   </Select>
                 </div>
                 <Badge variant="secondary" className="w-full justify-center py-1.5">
-                  Tap dishes on the left to add to this order
+                  {t("waiter.tapToAdd")}
                 </Badge>
               </CardContent>
             </Card>

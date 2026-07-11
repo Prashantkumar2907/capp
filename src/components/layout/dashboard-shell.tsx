@@ -27,24 +27,26 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn, initials } from "@/lib/utils";
 import { roleLabels, roleAccess } from "@/lib/constants";
+import { useT } from "@/lib/i18n";
 import { useAuth } from "@/features/auth/auth-provider";
 
 const navItems: Array<{ href: string; label: string; icon: React.ComponentType<{ className?: string }>; resource: keyof typeof roleAccess }> = [
-  { href: "/dashboard", label: "Counter", icon: LayoutDashboard, resource: "dashboard" },
-  { href: "/dashboard/orders", label: "Orders", icon: ShoppingCart, resource: "orders" },
-  { href: "/dashboard/kitchen", label: "Kitchen", icon: ChefHat, resource: "kitchen" },
-  { href: "/dashboard/waiter", label: "Waiter", icon: ClipboardList, resource: "waiter" },
-  { href: "/dashboard/payments", label: "Payments", icon: CreditCard, resource: "payments" },
-  { href: "/dashboard/menu", label: "Menu", icon: UtensilsCrossed, resource: "menu" },
-  { href: "/dashboard/tables", label: "Tables", icon: Table2, resource: "tables" },
-  { href: "/dashboard/branches", label: "Branches", icon: Store, resource: "branches" },
-  { href: "/dashboard/staff", label: "Staff", icon: Users, resource: "staff" },
-  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3, resource: "analytics" },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings, resource: "settings" },
+  { href: "/dashboard", label: "nav.counter", icon: LayoutDashboard, resource: "dashboard" },
+  { href: "/dashboard/orders", label: "nav.orders", icon: ShoppingCart, resource: "orders" },
+  { href: "/dashboard/kitchen", label: "nav.kitchen", icon: ChefHat, resource: "kitchen" },
+  { href: "/dashboard/waiter", label: "nav.waiter", icon: ClipboardList, resource: "waiter" },
+  { href: "/dashboard/payments", label: "nav.payments", icon: CreditCard, resource: "payments" },
+  { href: "/dashboard/menu", label: "nav.menu", icon: UtensilsCrossed, resource: "menu" },
+  { href: "/dashboard/tables", label: "nav.tables", icon: Table2, resource: "tables" },
+  { href: "/dashboard/branches", label: "nav.branches", icon: Store, resource: "branches" },
+  { href: "/dashboard/staff", label: "nav.staff", icon: Users, resource: "staff" },
+  { href: "/dashboard/analytics", label: "nav.analytics", icon: BarChart3, resource: "analytics" },
+  { href: "/dashboard/settings", label: "nav.settings", icon: Settings, resource: "settings" },
 ];
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, staff, organization, branch, loading, role, roles, canAccess, signOut } = useAuth();
+  const t = useT();
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
@@ -92,7 +94,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 )}
               >
                 <item.icon className="h-4 w-4" />
-                <span>{item.label}</span>
+                <span>{t(item.label)}</span>
               </Link>
             );
           })}
@@ -130,7 +132,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               <Menu className="h-5 w-5" />
             </Button>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{page?.label ?? "Dashboard"}</p>
+              <p className="truncate text-sm font-semibold">{page ? t(page.label) : "Dashboard"}</p>
               <p className="hidden truncate text-xs text-muted-foreground sm:block">
                 {roleSummary(role, roles)} at {branch?.name ?? organization?.name ?? "restaurant"}
               </p>
@@ -159,7 +161,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             return (
               <Link key={item.href} href={item.href} className={cn("flex flex-col items-center justify-center gap-1 text-[0.625rem]", active ? "text-primary" : "text-muted-foreground")}>
                 <item.icon className="h-4 w-4" />
-                {item.label}
+                {t(item.label)}
               </Link>
             );
           })}

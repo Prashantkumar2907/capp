@@ -1,3 +1,4 @@
+import { useT } from "@/lib/i18n";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
@@ -31,7 +32,7 @@ const ITEM_STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-red-100 text-red-800",
 };
 
-function getConfig(variant: StatusVariant, status: string) {
+function getConfig(variant: StatusVariant, status: string, t?: (key: string) => string) {
   switch (variant) {
     case "payment":
       return {
@@ -46,7 +47,7 @@ function getConfig(variant: StatusVariant, status: string) {
     default:
       return {
         color: orderStatusColors[status as keyof typeof orderStatusColors] ?? "",
-        label: orderStatusLabels[status as keyof typeof orderStatusLabels] ?? status,
+        label: (t ? t(`status.${status}`) : orderStatusLabels[status as keyof typeof orderStatusLabels]) ?? status,
       };
   }
 }
@@ -56,7 +57,8 @@ function getConfig(variant: StatusVariant, status: string) {
  * with consistent coloring derived from the constants map.
  */
 export function StatusBadge({ status, variant = "order", className }: StatusBadgeProps) {
-  const { color, label } = getConfig(variant, status);
+  const t = useT();
+  const { color, label } = getConfig(variant, status, t);
   return (
     <Badge className={cn("text-[10px] h-5 capitalize border-0", color, className)}>
       {label}

@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/components/shared/page-header";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/features/auth/auth-provider";
+import { useLocale, type Locale } from "@/lib/i18n";
 import { ChefHat, Plus, Trash2 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -176,6 +177,7 @@ export default function SettingsPage() {
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
               </Select>
+              <LanguagePicker />
             </CardContent>
           </Card>
           <Card>
@@ -300,5 +302,21 @@ function StationsCard() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+
+/** Per-device staff UI language — the kitchen tablet can run Hindi while the owner's phone stays English. */
+function LanguagePicker() {
+  const { locale, setLocale, t } = useLocale();
+  return (
+    <div className="space-y-1.5">
+      <Label>{t("settings.language")}</Label>
+      <Select value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
+        <option value="en">English</option>
+        <option value="hi">हिन्दी (Hindi)</option>
+      </Select>
+      <p className="text-xs text-muted-foreground">{t("settings.languageHint")}</p>
+    </div>
   );
 }

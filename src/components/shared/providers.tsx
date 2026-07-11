@@ -5,6 +5,7 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import { useState } from "react";
 import { AuthProvider } from "@/features/auth/auth-provider";
+import { LocaleProvider } from "@/lib/i18n";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -24,7 +25,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
         <AuthProvider>
+          <LocaleProvider>
           {children}
+          </LocaleProvider>
           <Toaster richColors closeButton position="top-right" duration={2600} />
         </AuthProvider>
       </ThemeProvider>
