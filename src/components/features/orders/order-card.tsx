@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, ReceiptText, Table2, UserRound } from "lucide-react";
+import { Clock, ReceiptText, Table2, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { OrderStatusBadge } from "@/components/shared/status-badge";
@@ -13,12 +13,14 @@ interface OrderCardProps {
   busy?: boolean;
   compact?: boolean;
   onStatusChange?: (status: OrderStatus) => void;
+  onCancel?: () => void;
   actionLabel?: string;
   className?: string;
 }
 
-export function OrderCard({ order, busy, compact, onStatusChange, actionLabel, className }: OrderCardProps) {
+export function OrderCard({ order, busy, compact, onStatusChange, onCancel, actionLabel, className }: OrderCardProps) {
   const nextStatus = nextOrderStatus(order.status);
+  const canCancel = onCancel && !["served", "cancelled"].includes(order.status);
 
   return (
     <Card className={cn("transition-colors duration-150 hover:border-primary/40", className)}>
@@ -70,10 +72,19 @@ export function OrderCard({ order, busy, compact, onStatusChange, actionLabel, c
             {order.notes}
           </div>
         ) : null}
-        {nextStatus && onStatusChange ? (
-          <Button className="w-full" disabled={busy} onClick={() => onStatusChange(nextStatus)}>
-            {actionLabel ?? `Mark ${orderStatusLabels[nextStatus]}`}
-          </Button>
+        {(nextStatus && onStatusChange) || canCancel ? (
+          <div className="flex gap-2">
+            {nextStatus && onStatusChange ? (
+              <Button className="flex-1" disabled={busy} onClick={() => onStatusChange(nextStatus)}>
+                {actionLabel ?? `Mark ${orderStatusLabels[nextStatus]}`}
+              </Button>
+            ) : null}
+            {canCancel ? (
+              <Button variant="outline" size="icon" disabled={busy} onClick={onCancel} title="Cancel order" aria-label="Cancel order">
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </CardContent>
     </Card>

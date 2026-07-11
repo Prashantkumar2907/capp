@@ -161,6 +161,12 @@ Exit: first paid subscription.
 - [x] Motion (framer-motion was installed but never used): kitchen tickets spring in/out across columns with layout animation; Counter live orders animate in/out
 - Deferred: realtime connection-lost indicator (needs channel-status plumbing through use-realtime-orders)
 
+**Tier-1 operational hardening (post-quality-pass gap audit).**
+- [x] Staff order cancellation (16_cancel_cleanup_items.sql + /api/orders/[id]/cancel): manager+, cancels order+items, voids pending payment, frees table (via 15_ trigger), logs who/why to activity_logs; refuses already-PAID orders (that's a refund flow). Confirm dialog on the Orders page. DB-tested: cancel frees table + fails payment + logs; paid order protected
+- [x] Abandoned-order cleanup (cleanup_abandoned_orders + /api/cron/cleanup-orders): auto-cancels unpaid, unserved orders past a cutoff (default 4h) so QR walk-aways stop holding tables/cluttering the kitchen. CRON_SECRET-gated (Bearer or ?secret=), GET+POST for any scheduler. DB-tested: backdated ghost order cancelled + table freed. Secret gating live-verified (wrong→401, right→passes)
+- [x] Item-level kitchen granularity (set_item_status + order roll-up): mark one item ready while others cook; order status derived from items (any cooking→preparing, all ready→ready, all served→served). Per-item "Mark ready" buttons on kitchen tickets. DB-tested: naan ready→order preparing, all ready→order ready
+- [x] Rate limiting on the public order endpoint (rate-limit.ts): per branch+IP sliding window (8/min), QR/anonymous only — staff sources exempt. Live-verified: 8 pass, 9th+10th return 429. Unit-tested. In-memory (swap for Redis for multi-instance later)
+
 **Phase 5 — Earned expansions.** Aggregators, inventory, more languages — driven by paying-customer demand only.
 
 ---

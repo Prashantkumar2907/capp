@@ -9,15 +9,17 @@ interface Params {
 }
 
 interface StatusBody {
-  status: OrderStatus;
+  status?: OrderStatus;
   itemStatus?: "pending" | "accepted" | "preparing" | "ready" | "served" | "cancelled";
+  /** when set, advance just this one item and roll the order status up from its items */
+  itemId?: string;
 }
 
 export async function PATCH(request: NextRequest, { params }: Params) {
   const { orderId } = await params;
   const body = (await request.json()) as StatusBody;
 
-  if (!orderStatuses.includes(body.status)) {
+  if (!body.itemId && (!body.status || !orderStatuses.includes(body.status))) {
     return NextResponse.json({ error: "Invalid order status" }, { status: 400 });
   }
 
@@ -39,6 +41,19 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   if (!existing || resolvedOrgId !== guard.staff.orgId) {
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  }
+
+  // Single-item advance (naan ready while curry cooks): roll order status up from items
+  if (body.itemId) {
+    const { data: itemBelongs } = await admin.from("order_items").select("id").eq("id", body.itemId).eq("order_id", orderId).maybeSingle();
+    if (!itemBelongs) return NextResponse.json({ error: "Item not found on this order" }, { status: 404 });
+    const { data: rolled, error: itemError } = await admin.rpc("set_item_status", { p_item_id: body.itemId, p_status: body.itemStatus ?? "ready" });
+    if (itemError) return NextResponse.json({ error: "Unable to update item" }, { status: 400 });
+    return NextResponse.json({ ok: true, order: rolled });
+  }
+
+  if (!body.status || !orderStatuses.includes(body.status)) {
+    return NextResponse.json({ error: "Invalid order status" }, { status: 400 });
   }
 
   const { data: order, error } = await admin.from("orders").update({ status: body.status }).eq("id", orderId).select("*").single();

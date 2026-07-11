@@ -16,17 +16,39 @@ import { orderStatuses, orderStatusLabels, type OrderStatus } from "@/lib/consta
 import { formatCurrency } from "@/lib/utils";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
 import { useAuth } from "@/features/auth/auth-provider";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 
 type SourceFilter = "all" | "waiter" | "qr_customer" | "cashier";
 
 export default function OrdersPage() {
-  const { branch } = useAuth();
+  const { branch, hasRole } = useAuth();
   const queryClient = useQueryClient();
   const { orders, loading, error, refresh } = useRealtimeOrders(branch?.id);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<OrderStatus | "all">("all");
   const [source, setSource] = useState<SourceFilter>("all");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [cancelId, setCancelId] = useState<string | null>(null);
+
+  const cancelOrder = async (orderId: string) => {
+    setBusyId(orderId);
+    try {
+      const response = await fetch(`/api/orders/${orderId}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "cancelled by staff" }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Unable to cancel");
+      await refresh();
+      toast.success("Order cancelled");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to cancel");
+    } finally {
+      setBusyId(null);
+      setCancelId(null);
+    }
+  };
 
   const filtered = useMemo(() => {
     return orders.filter((order) => {
@@ -117,12 +139,22 @@ export default function OrdersPage() {
       ) : filtered.length ? (
         <div className="grid gap-3 xl:grid-cols-2">
           {filtered.map((order) => (
-            <OrderCard key={order.id} order={order} busy={busyId === order.id} onStatusChange={(nextStatus) => void updateStatus(order.id, nextStatus)} />
+            <OrderCard key={order.id} order={order} busy={busyId === order.id} onStatusChange={(nextStatus) => void updateStatus(order.id, nextStatus)}
+                onCancel={hasRole("owner", "admin", "manager") ? () => setCancelId(order.id) : undefined} />
           ))}
         </div>
       ) : (
         <EmptyState icon={ShoppingCart} title="No orders in this view" description="Change filters or create a waiter order to start service." />
       )}
+      <ConfirmDialog
+        open={!!cancelId}
+        onOpenChange={(open) => !open && setCancelId(null)}
+        title="Cancel this order?"
+        description="The order and its items will be cancelled and the table freed. This cannot be undone."
+        confirmLabel="Cancel order"
+        cancelLabel="Keep order"
+        onConfirm={() => cancelId && void cancelOrder(cancelId)}
+      />
     </div>
   );
 }

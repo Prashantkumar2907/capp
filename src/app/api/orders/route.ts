@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { Order } from "@/types/database";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 interface OrderBody {
   branchId: string;
@@ -37,6 +38,18 @@ export async function POST(request: NextRequest) {
 
   if (!body.branchId || !body.items?.length) {
     return NextResponse.json({ error: "Branch and order items are required" }, { status: 400 });
+  }
+
+  // Public endpoint: throttle per branch + client to stop fake-order floods.
+  // Waiter/cashier (authenticated staff sources) are exempt.
+  if (body.orderSource === "qr_customer" || !body.orderSource) {
+    const limit = rateLimit(`order:${body.branchId}:${clientIp(request)}`, 8, 60_000);
+    if (!limit.ok) {
+      return NextResponse.json(
+        { error: "Too many orders in a short time. Please wait a moment and try again." },
+        { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } }
+      );
+    }
   }
 
   const admin = createAdminSupabase();

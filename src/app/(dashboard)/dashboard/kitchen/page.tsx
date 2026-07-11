@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChefHat, Flame, Printer, RefreshCw, Timer, Utensils } from "lucide-react";
+import { Check, ChefHat, Flame, Printer, RefreshCw, Timer, Utensils } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -62,6 +62,24 @@ export default function KitchenPage() {
   );
   const itemCount = kitchenOrders.reduce((sum, order) => sum + order.order_items.filter((item) => item.status !== "cancelled" && itemMatchesStation(item)).reduce((inner, item) => inner + item.quantity, 0), 0);
   const oldest = kitchenOrders.length ? kitchenOrders[kitchenOrders.length - 1] : null;
+
+  const setItemReady = async (order: OrderWithItems, itemId: string, nextStatus: "preparing" | "ready") => {
+    setBusyId(order.id);
+    try {
+      const response = await fetch(`/api/orders/${order.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId, itemStatus: nextStatus }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Unable to update item");
+      await refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to update item");
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const updateStatus = async (order: OrderWithItems, status: OrderStatus) => {
     setBusyId(order.id);
@@ -184,6 +202,17 @@ export default function KitchenPage() {
                                     </p>
                                   ) : null}
                                   {item.notes ? <p className="mt-1 text-xs text-muted-foreground">{item.notes}</p> : null}
+                                  {(column.key === "preparing" || column.key === "confirmed") ? (
+                                    <button
+                                      type="button"
+                                      disabled={busyId === order.id}
+                                      onClick={() => void setItemReady(order, item.id, item.status === "ready" ? "preparing" : "ready")}
+                                      className={`mt-2 flex w-full items-center justify-center gap-1 rounded-lg border py-1 text-xs font-medium transition-colors ${item.status === "ready" ? "border-success bg-success/10 text-success" : "text-muted-foreground hover:border-primary/40"}`}
+                                    >
+                                      <Check className="h-3 w-3" />
+                                      {item.status === "ready" ? t("kitchen.ready") : t("action.markReady")}
+                                    </button>
+                                  ) : null}
                                 </div>
                               ))}
                           </div>
