@@ -23,7 +23,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 import type { Category, DishWithRelations } from "@/types/database";
 
 const emptyDish = { name: "", description: "", price: 0, category_id: "", is_veg: true, is_active: true, prep_time_mins: 15 };
-const emptyCategory = { name: "", sort_order: 0, is_active: true };
+const emptyCategory = { name: "", sort_order: 0, is_active: true, station_id: "" };
 
 export default function MenuPage() {
   const { organization, branch } = useAuth();
@@ -37,6 +37,15 @@ export default function MenuPage() {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [dishForm, setDishForm] = useState(emptyDish);
   const [categoryForm, setCategoryForm] = useState(emptyCategory);
+  const stations = useQuery({
+    queryKey: ["stations", branch?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("stations").select("*").eq("branch_id", branch!.id).order("sort_order");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!branch,
+  });
   const [imageFile, setImageFile] = useState<File | null>(null);
 
   const menu = useQuery({
@@ -98,11 +107,11 @@ export default function MenuPage() {
   const saveCategory = useMutation({
     mutationFn: async () => {
       if (editingCategory) {
-        const { error } = await supabase.from("categories").update(categoryForm).eq("id", editingCategory.id);
+        const { error } = await supabase.from("categories").update({ ...categoryForm, station_id: categoryForm.station_id || null }).eq("id", editingCategory.id);
         if (error) throw error;
         return;
       }
-      const { error } = await supabase.from("categories").insert({ ...categoryForm, org_id: organization!.id });
+      const { error } = await supabase.from("categories").insert({ ...categoryForm, station_id: categoryForm.station_id || null, org_id: organization!.id });
       if (error) throw error;
     },
     onSuccess: async () => {
@@ -129,9 +138,20 @@ export default function MenuPage() {
     setDishOpen(true);
   };
 
+  const editCategory = (category: Category) => {
+    setEditingCategory(category);
+    setCategoryForm({
+      name: category.name,
+      sort_order: category.sort_order,
+      is_active: category.is_active ?? true,
+      station_id: category.station_id ?? "",
+    });
+    setCategoryOpen(true);
+  };
+
   return (
     <div className="space-y-5">
-      <PageHeader title="Menu" description={`${menu.data?.dishes.length ?? 0} dishes | ${menu.data?.categories.length ?? 0} categories`} actions={<><Button variant="secondary" onClick={() => setCategoryOpen(true)}><Plus className="h-4 w-4" />Category</Button><Button onClick={() => { setEditingDish(null); setDishForm(emptyDish); setDishOpen(true); }}><Plus className="h-4 w-4" />Dish</Button></>} />
+      <PageHeader title="Menu" description={`${menu.data?.dishes.length ?? 0} dishes | ${menu.data?.categories.length ?? 0} categories`} actions={<><Button variant="secondary" onClick={() => { setEditingCategory(null); setCategoryForm(emptyCategory); setCategoryOpen(true); }}><Plus className="h-4 w-4" />Category</Button><Button onClick={() => { setEditingDish(null); setDishForm(emptyDish); setDishOpen(true); }}><Plus className="h-4 w-4" />Dish</Button></>} />
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-64 flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -142,6 +162,27 @@ export default function MenuPage() {
           {menu.data?.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
         </Select>
       </div>
+      {menu.data?.categories.length ? (
+        <div className="flex flex-wrap gap-1.5">
+          {menu.data.categories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              onClick={() => editCategory(category)}
+              className="group flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+              title="Edit category"
+            >
+              {category.name}
+              {stations.data?.find((station) => station.id === category.station_id) ? (
+                <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[0.6rem] font-medium text-primary">
+                  {stations.data.find((station) => station.id === category.station_id)?.name}
+                </span>
+              ) : null}
+              <Edit2 className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
+            </button>
+          ))}
+        </div>
+      ) : null}
       {menu.isLoading ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-32" />)}</div>
       ) : dishes.length ? (
@@ -209,6 +250,16 @@ export default function MenuPage() {
         <div className="space-y-3">
           <Field label="Name"><Input value={categoryForm.name} onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })} /></Field>
           <Field label="Sort order"><Input type="number" value={categoryForm.sort_order} onChange={(event) => setCategoryForm({ ...categoryForm, sort_order: Number(event.target.value) })} /></Field>
+          {stations.data?.length ? (
+            <Field label="Kitchen station (routes tickets)">
+              <Select value={categoryForm.station_id} onChange={(event) => setCategoryForm({ ...categoryForm, station_id: event.target.value })}>
+                <option value="">No station</option>
+                {stations.data.map((station) => (
+                  <option key={station.id} value={station.id}>{station.name}</option>
+                ))}
+              </Select>
+            </Field>
+          ) : null}
           <Button className="w-full" disabled={!categoryForm.name || saveCategory.isPending} onClick={() => saveCategory.mutate()}>Save category</Button>
         </div>
       </Dialog>

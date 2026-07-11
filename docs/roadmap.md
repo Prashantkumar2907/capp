@@ -129,8 +129,13 @@ Exit criterion still open: one real restaurant runs a full service day.
 **Phase 2 exit criterion MET (pending live click-through): a restaurant can legally hand a customer our bill and close the till.**
 Exit: a restaurant can legally hand a customer our bill.
 
-**Phase 3 — Scale features.**
-Station routing → multi-branch analytics → WhatsApp notifications → Hindi UI → table merge/split. Exit: a 50+ cover restaurant runs on it.
+**Phase 3 — Scale features.** (in progress)
+- [x] Station routing (12_stations.sql): stations per branch (Settings card, manager+), categories map to stations (Menu page — categories now editable with station badges; edit was previously dead code), order items snapshot station_id/name at order time in both create_order and add_order_items (DB-tested: Naan→Tandoor, Noodles→Chinese, open-order adds snapshot too); kitchen board gets station filter pills — tickets show only that station's items, ticket/queue counts follow
+- [x] Multi-branch analytics: owner/admin-only branch comparison (revenue bar chart + per-branch order counts over the selected window); auto-hides for single-branch orgs
+- [ ] WhatsApp order-ready + receipt notifications (needs provider account — Gupshup/Twilio)
+- [ ] Hindi staff UI (next-intl string extraction)
+- [ ] Table merge/split
+Exit: a 50+ cover restaurant runs on it.
 
 **Phase 4 — Monetization.**
 Plans, Razorpay subscriptions, gating, billing lifecycle. Exit: first paid subscription.

@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { BarChart3, Clock, IndianRupee, ShoppingBag, Star } from "lucide-react";
+import { BarChart3, Clock, IndianRupee, ShoppingBag, Star, Store } from "lucide-react";
+import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,7 +18,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 const chartColors = ["#128c7e", "#d99012", "#3275c9", "#0f9f6e", "#df3f3f", "#66736d"];
 
 export default function AnalyticsPage() {
-  const { branch } = useAuth();
+  const { branch, organization, hasRole } = useAuth();
   const [supabase] = useState(() => createClient());
   const [days, setDays] = useState(7);
 
@@ -90,6 +91,7 @@ export default function AnalyticsPage() {
         <StatCard label="Average rating" value={data?.averageRating ? data.averageRating.toFixed(1) : "No ratings"} icon={Star} tone="success" />
       </div>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
+        {hasRole("owner", "admin") ? <BranchComparison orgId={organization?.id} days={days} /> : null}
         <ChartCard title="Revenue trend" description="Daily revenue and order count">
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={revenueData}>
@@ -171,5 +173,59 @@ function ChartCard({ title, description, children }: { title: string; descriptio
         {children}
       </CardContent>
     </Card>
+  );
+}
+
+
+/**
+ * Owner view: revenue + order count per branch over the selected window.
+ * Only meaningful for multi-branch orgs; hides itself for single-branch.
+ */
+function BranchComparison({ orgId, days }: { orgId?: string; days: number }) {
+  const [supabase] = useState(() => createBrowserClient());
+  const comparison = useQuery({
+    queryKey: ["branch-comparison", orgId, days],
+    queryFn: async () => {
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      const [{ data: branches, error: branchError }, { data: orders, error: orderError }] = await Promise.all([
+        supabase.from("branches").select("id, name").eq("org_id", orgId!).eq("is_active", true),
+        supabase.from("orders").select("branch_id, total, status, created_at").gte("created_at", since),
+      ]);
+      if (branchError) throw branchError;
+      if (orderError) throw orderError;
+      return (branches ?? []).map((row) => {
+        const branchOrders = (orders ?? []).filter((order) => order.branch_id === row.id && order.status !== "cancelled");
+        return {
+          name: row.name,
+          revenue: Math.round(branchOrders.reduce((sum, order) => sum + Number(order.total), 0)),
+          orders: branchOrders.length,
+        };
+      }).sort((a, b) => b.revenue - a.revenue);
+    },
+    enabled: !!orgId,
+  });
+
+  if (!comparison.data || comparison.data.length < 2) return null;
+
+  return (
+    <ChartCard title="Branch comparison" description={`Revenue by branch, last ${days} days`}>
+      <ResponsiveContainer width="100%" height={260}>
+        <BarChart data={comparison.data} layout="vertical" margin={{ left: 8, right: 16 }}>
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-border" />
+          <XAxis type="number" tickFormatter={(value) => `₹${value >= 1000 ? `${Math.round(value / 1000)}k` : value}`} tick={{ fontSize: 11 }} />
+          <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11 }} />
+          <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} />
+          <Bar dataKey="revenue" radius={[0, 8, 8, 0]} className="fill-primary" />
+        </BarChart>
+      </ResponsiveContainer>
+      <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
+        {comparison.data.map((row) => (
+          <div key={row.name} className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5"><Store className="h-3 w-3" />{row.name}</span>
+            <span className="font-numbers">{row.orders} orders · {formatCurrency(row.revenue)}</span>
+          </div>
+        ))}
+      </div>
+    </ChartCard>
   );
 }

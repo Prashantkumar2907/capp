@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/components/shared/page-header";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/features/auth/auth-provider";
+import { ChefHat, Plus, Trash2 } from "lucide-react";
 
 export default function SettingsPage() {
   const { organization, branch, refresh } = useAuth();
@@ -164,6 +165,7 @@ export default function SettingsPage() {
               </Button>
             </CardContent>
           </Card>
+          <StationsCard />
         </section>
         <aside className="space-y-4">
           <Card>
@@ -225,5 +227,78 @@ function SectionTitle({ icon: Icon, title, description }: { icon: React.Componen
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
     </div>
+  );
+}
+
+
+/**
+ * Kitchen stations (Tandoor, Chinese, Bar…). Map categories to stations in
+ * the Menu page; each kitchen screen can then filter to its own tickets.
+ */
+function StationsCard() {
+  const { branch, hasRole } = useAuth();
+  const [supabase] = useState(() => createClient());
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+
+  const stations = useQuery({
+    queryKey: ["stations", branch?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("stations").select("*").eq("branch_id", branch!.id).order("sort_order");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!branch,
+  });
+
+  const addStation = useMutation({
+    mutationFn: async () => {
+      if (!name.trim()) throw new Error("Enter a station name");
+      const { error } = await supabase
+        .from("stations")
+        .insert({ branch_id: branch!.id, name: name.trim(), sort_order: stations.data?.length ?? 0 });
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      setName("");
+      await queryClient.invalidateQueries({ queryKey: ["stations"] });
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const removeStation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("stations").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["stations"] }),
+    onError: (error) => toast.error(error.message),
+  });
+
+  if (!hasRole("owner", "admin", "manager")) return null;
+
+  return (
+    <Card>
+      <CardContent className="space-y-4 p-4">
+        <SectionTitle icon={ChefHat} title="Kitchen stations" description="Tandoor, Chinese, Bar — large kitchens route tickets by station." />
+        <div className="space-y-1.5">
+          {(stations.data ?? []).map((station) => (
+            <div key={station.id} className="flex items-center justify-between gap-2 rounded-xl border px-3 py-2">
+              <span className="text-sm">{station.name}</span>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeStation.mutate(station.id)} aria-label={`Remove ${station.name}`}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+          {!stations.data?.length ? <p className="text-xs text-muted-foreground">No stations yet — small kitchens can skip this.</p> : null}
+        </div>
+        <div className="flex gap-2">
+          <Input placeholder="Tandoor" value={name} onChange={(event) => setName(event.target.value)} />
+          <Button variant="secondary" size="icon" className="shrink-0" disabled={addStation.isPending} onClick={() => addStation.mutate()} aria-label="Add station">
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

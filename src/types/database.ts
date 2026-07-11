@@ -139,6 +139,14 @@ export interface Database {
           { foreignKeyName: "dish_addons_dish_id_fkey"; columns: ["dish_id"]; referencedRelation: "dishes"; referencedColumns: ["id"] },
         ];
       };
+      stations: {
+        Row: Station;
+        Insert: Partial<Station> & Pick<Station, "branch_id" | "name">;
+        Update: Partial<Station>;
+        Relationships: [
+          { foreignKeyName: "stations_branch_id_fkey"; columns: ["branch_id"]; referencedRelation: "branches"; referencedColumns: ["id"] },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -225,6 +233,7 @@ export type Category = {
   org_id: string;
   name: string;
   sort_order: number;
+  station_id?: string | null;
   is_active: boolean;
   created_at: string;
 };
@@ -310,6 +319,14 @@ export type DishAddon = {
 
 export type OrderItemAddonSnapshot = { name: string; price: number };
 
+export type Station = {
+  id: string;
+  branch_id: string;
+  name: string;
+  sort_order: number;
+  created_at?: string;
+};
+
 export type OrderItem = {
   id: string;
   order_id: string;
@@ -320,6 +337,8 @@ export type OrderItem = {
   price_at_order: number;
   variant_id?: string | null;
   variant_name?: string | null;
+  station_id?: string | null;
+  station_name?: string | null;
   addons?: OrderItemAddonSnapshot[] | Json;
   addon_total?: number;
   notes: string | null;

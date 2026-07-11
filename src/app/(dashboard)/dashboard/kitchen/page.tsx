@@ -13,6 +13,9 @@ import { orderStatusLabels, type OrderStatus } from "@/lib/constants";
 import { timeAgo } from "@/lib/utils";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
 import { useAuth } from "@/features/auth/auth-provider";
+import { useQuery } from "@tanstack/react-query";
+import { createClient } from "@/lib/supabase/client";
+import { Select } from "@/components/ui/select";
 import { printKot } from "@/lib/print-kot";
 import type { OrderWithItems } from "@/types/database";
 
@@ -25,11 +28,33 @@ const columns: Array<{ key: OrderStatus; title: string; action?: OrderStatus; ac
 
 export default function KitchenPage() {
   const { branch, organization } = useAuth();
+  const [supabaseClient] = useState(() => createClient());
+  const [stationId, setStationId] = useState<string>("all");
+  const stations = useQuery({
+    queryKey: ["stations", branch?.id],
+    queryFn: async () => {
+      const { data, error } = await supabaseClient.from("stations").select("*").eq("branch_id", branch!.id).order("sort_order");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!branch,
+  });
+
+  /** With a station selected, only tickets containing that station's items count. */
+  const itemMatchesStation = (item: { station_id?: string | null }) => stationId === "all" || item.station_id === stationId;
   const { orders, loading, error, refresh } = useRealtimeOrders(branch?.id);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const kitchenOrders = useMemo(() => orders.filter((order) => ["pending", "confirmed", "preparing", "ready"].includes(order.status)), [orders]);
-  const itemCount = kitchenOrders.reduce((sum, order) => sum + order.order_items.reduce((inner, item) => inner + item.quantity, 0), 0);
+  const kitchenOrders = useMemo(
+    () =>
+      orders.filter(
+        (order) =>
+          ["pending", "confirmed", "preparing", "ready"].includes(order.status) &&
+          (stationId === "all" || order.order_items.some((item) => item.status !== "cancelled" && item.station_id === stationId))
+      ),
+    [orders, stationId]
+  );
+  const itemCount = kitchenOrders.reduce((sum, order) => sum + order.order_items.filter((item) => item.status !== "cancelled" && itemMatchesStation(item)).reduce((inner, item) => inner + item.quantity, 0), 0);
   const oldest = kitchenOrders.length ? kitchenOrders[kitchenOrders.length - 1] : null;
 
   const updateStatus = async (order: OrderWithItems, status: OrderStatus) => {
@@ -68,6 +93,19 @@ export default function KitchenPage() {
         <StatCard label="Items in queue" value={itemCount} icon={Utensils} tone="warning" />
         <StatCard label="Oldest ticket" value={oldest ? timeAgo(oldest.created_at) : "Clear"} icon={Timer} tone="success" />
       </div>
+      {stations.data?.length ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">Station</span>
+          <button onClick={() => setStationId("all")} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${stationId === "all" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-secondary"}`}>
+            All
+          </button>
+          {stations.data.map((station) => (
+            <button key={station.id} onClick={() => setStationId(station.id)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${stationId === station.id ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-secondary"}`}>
+              {station.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {loading ? (
         <div className="grid gap-3 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, index) => (
@@ -115,7 +153,7 @@ export default function KitchenPage() {
                           </div>
                           <div className="space-y-2">
                             {order.order_items
-                              .filter((item) => item.status !== "cancelled")
+                              .filter((item) => item.status !== "cancelled" && itemMatchesStation(item))
                               .map((item) => (
                                 <div key={item.id} className="rounded-xl bg-secondary p-3">
                                   <div className="flex justify-between gap-3">
