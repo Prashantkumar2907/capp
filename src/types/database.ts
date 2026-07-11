@@ -115,12 +115,54 @@ export interface Database {
           { foreignKeyName: "feedback_branch_id_fkey"; columns: ["branch_id"]; referencedRelation: "branches"; referencedColumns: ["id"] },
         ];
       };
+      staff_roles: {
+        Row: StaffRoleRow;
+        Insert: StaffRoleRow;
+        Update: never;
+        Relationships: [
+          { foreignKeyName: "staff_roles_staff_id_fkey"; columns: ["staff_id"]; referencedRelation: "staff"; referencedColumns: ["id"] },
+        ];
+      };
+      dish_variants: {
+        Row: DishVariant;
+        Insert: Partial<DishVariant> & Pick<DishVariant, "dish_id" | "name" | "price">;
+        Update: Partial<DishVariant>;
+        Relationships: [
+          { foreignKeyName: "dish_variants_dish_id_fkey"; columns: ["dish_id"]; referencedRelation: "dishes"; referencedColumns: ["id"] },
+        ];
+      };
+      dish_addons: {
+        Row: DishAddon;
+        Insert: Partial<DishAddon> & Pick<DishAddon, "dish_id" | "name">;
+        Update: Partial<DishAddon>;
+        Relationships: [
+          { foreignKeyName: "dish_addons_dish_id_fkey"; columns: ["dish_id"]; referencedRelation: "dishes"; referencedColumns: ["id"] },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
       app_user_org_id: { Args: Record<string, never>; Returns: string | null };
       app_user_role: { Args: Record<string, never>; Returns: string | null };
       app_user_branch_id: { Args: Record<string, never>; Returns: string | null };
+      app_user_roles: { Args: Record<string, never>; Returns: string[] };
+      app_user_has_role: { Args: { check_roles: string[] }; Returns: boolean };
+      add_order_items: { Args: { p_order_id: string; p_items: Json }; Returns: Json };
+      remove_order_item: { Args: { p_order_id: string; p_item_id: string }; Returns: Json };
+      create_order: {
+        Args: {
+          p_branch_id: string;
+          p_items: Json;
+          p_table_number?: number | null;
+          p_customer_name?: string | null;
+          p_customer_phone?: string | null;
+          p_waiter_id?: string | null;
+          p_order_type?: string;
+          p_order_source?: string;
+          p_notes?: string | null;
+        };
+        Returns: Json;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
@@ -227,7 +269,7 @@ export type Order = {
   customer_name: string | null;
   customer_phone: string | null;
   waiter_id: string | null;
-  order_type: "dine_in" | "takeaway" | "delivery";
+  order_type: "dine_in" | "takeaway" | "delivery" | "counter";
   order_source: "waiter" | "qr_customer" | "cashier";
   status: "pending" | "confirmed" | "preparing" | "ready" | "served" | "cancelled";
   subtotal: number;
@@ -239,6 +281,28 @@ export type Order = {
   updated_at: string;
 };
 
+export type DishVariant = {
+  id: string;
+  dish_id: string;
+  name: string;
+  price: number;
+  is_available: boolean;
+  sort_order: number;
+  created_at?: string;
+};
+
+export type DishAddon = {
+  id: string;
+  dish_id: string;
+  name: string;
+  price: number;
+  is_available: boolean;
+  sort_order: number;
+  created_at?: string;
+};
+
+export type OrderItemAddonSnapshot = { name: string; price: number };
+
 export type OrderItem = {
   id: string;
   order_id: string;
@@ -247,6 +311,10 @@ export type OrderItem = {
   dish_name: string;
   quantity: number;
   price_at_order: number;
+  variant_id?: string | null;
+  variant_name?: string | null;
+  addons?: OrderItemAddonSnapshot[] | Json;
+  addon_total?: number;
   notes: string | null;
   status: "pending" | "accepted" | "preparing" | "ready" | "served" | "cancelled";
   created_at: string;
@@ -300,5 +368,11 @@ export type Feedback = {
 };
 
 export type OrderWithItems = Order & { order_items: OrderItem[] };
-export type DishWithRelations = Dish & { categories?: Pick<Category, "name"> | null; branch_dishes?: BranchDish[] };
+export type DishWithRelations = Dish & { categories?: Pick<Category, "name"> | null; branch_dishes?: BranchDish[]; dish_variants?: DishVariant[]; dish_addons?: DishAddon[] };
 export type StaffRole = Staff["role"];
+
+export type StaffRoleRow = {
+  staff_id: string;
+  role: "owner" | "admin" | "manager" | "waiter" | "kitchen" | "cashier";
+  created_at?: string;
+};

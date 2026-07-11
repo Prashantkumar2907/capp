@@ -1,11 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
-import type { Branch, Category, Dish, RestaurantTable } from "@/types/database";
+import type { Branch, Category, Dish, DishAddon, DishVariant, RestaurantTable } from "@/types/database";
 
 type BranchDishRow = {
   custom_price: number | null;
   is_available: boolean;
-  dishes: (Dish & { categories: Pick<Category, "name"> | null }) | null;
+  dishes: (Dish & { categories: Pick<Category, "name"> | null; dish_variants?: DishVariant[]; dish_addons?: DishAddon[] }) | null;
 };
 
 export async function GET(request: NextRequest) {
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     admin.from("categories").select("*").eq("org_id", (branch as Branch).org_id).eq("is_active", true).order("sort_order"),
     admin
       .from("branch_dishes")
-      .select("custom_price, is_available, dishes(*, categories(name))")
+      .select("custom_price, is_available, dishes(*, categories(name), dish_variants(*), dish_addons(*))")
       .eq("branch_id", branchId)
       .eq("is_available", true)
       .order("created_at", { ascending: true }),
@@ -52,6 +52,8 @@ export async function GET(request: NextRequest) {
         ...row.dishes,
         price: Number(row.custom_price ?? row.dishes.price),
         categories: row.dishes.categories,
+        dish_variants: (row.dishes.dish_variants ?? []).filter((variant) => variant.is_available),
+        dish_addons: (row.dishes.dish_addons ?? []).filter((addon) => addon.is_available),
       };
     })
     .filter(Boolean);

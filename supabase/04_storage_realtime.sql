@@ -32,3 +32,19 @@ begin
 exception when duplicate_object then null;
 end;
 $$;
+
+-- Live out-of-stock updates on customer menus and kitchen toggles.
+do $$
+begin
+  alter publication supabase_realtime add table branch_dishes;
+exception when duplicate_object then null;
+end;
+$$;
+
+-- Live table status for the waiter floor view.
+do $$
+begin
+  alter publication supabase_realtime add table tables;
+exception when duplicate_object then null;
+end;
+$$;
