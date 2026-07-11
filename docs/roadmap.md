@@ -174,6 +174,11 @@ Exit: first paid subscription.
 - [x] First-run SetupChecklist on the Counter: guides a brand-new owner (esp. "Start empty") through add-dishes → tables/QR → staff → first-order with live progress; auto-hides once menu + first order exist. The make-or-break moment for the non-technical persona
 - [x] Verified empty-DB resilience (all divisions guarded, reduces seeded) and that the proxy correctly sends logged-out users on unknown paths to sign-in (security posture, not a bug); 404 serves for authed users + public typos
 
+**Pre-deploy fixes.**
+- [x] Hindi sweep finished for the shared-device STAFF screens: Orders + Tables now fully localized (the two screens waiters/cashiers use on shared devices); dictionary +29 keys per language (orders./tables./common.), en+hi balanced. Admin-only screens (menu/staff/settings forms, analytics, branches) deliberately stay English per the shared-device-Hindi scope — owners configure in English, floor staff operate in Hindi
+- [x] Daily owner WhatsApp summary (/api/cron/daily-summary): each morning sends every org's owner yesterday's sales, order count, top dish, rating in IST day boundaries; skips zero-days and owners without a phone; CRON_SECRET-gated; no-op when WhatsApp unconfigured. dailySummaryMessage unit-tested. Live-verified secret gating (no secret→401, right→200)
+- [x] vercel.json: both crons scheduled (cleanup every 2h, daily summary 09:00 IST). For Supabase-only deploys, point pg_cron/Edge Functions at the same URLs with the secret
+
 **Phase 5 — Earned expansions.** Aggregators, inventory, more languages — driven by paying-customer demand only.
 
 ---

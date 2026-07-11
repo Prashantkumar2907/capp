@@ -43,3 +43,20 @@ test("calculateTotals composition scheme charges no GST but keeps service charge
   assert.equal(totals.serviceCharge, 20);
   assert.equal(totals.total, 220);
 });
+
+test("dailySummaryMessage builds a readable owner recap", async () => {
+  const { dailySummaryMessage } = await import("../../src/lib/notify-whatsapp");
+  const message = dailySummaryMessage({ restaurantName: "Spice Garden", date: "11 Jul", revenue: 18400, orders: 47, topDish: "Paneer Butter Masala", avgRating: 4.6 });
+  assert.match(message, /Spice Garden/);
+  assert.match(message, /₹18,400/);
+  assert.match(message, /Orders: 47/);
+  assert.match(message, /Paneer Butter Masala/);
+  assert.match(message, /4\.6/);
+});
+
+test("dailySummaryMessage omits missing optional lines", async () => {
+  const { dailySummaryMessage } = await import("../../src/lib/notify-whatsapp");
+  const message = dailySummaryMessage({ restaurantName: "Dhaba", date: "11 Jul", revenue: 500, orders: 3 });
+  assert.doesNotMatch(message, /Top dish/);
+  assert.doesNotMatch(message, /Rating/);
+});

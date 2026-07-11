@@ -16,12 +16,14 @@ import { orderStatuses, orderStatusLabels, type OrderStatus } from "@/lib/consta
 import { formatCurrency } from "@/lib/utils";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
 import { useAuth } from "@/features/auth/auth-provider";
+import { useT } from "@/lib/i18n";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 
 type SourceFilter = "all" | "waiter" | "qr_customer" | "cashier";
 
 export default function OrdersPage() {
   const { branch, hasRole } = useAuth();
+  const t = useT();
   const queryClient = useQueryClient();
   const { orders, loading, error, refresh } = useRealtimeOrders(branch?.id);
   const [search, setSearch] = useState("");
@@ -41,7 +43,7 @@ export default function OrdersPage() {
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(payload.error ?? "Unable to cancel");
       await refresh();
-      toast.success("Order cancelled");
+      toast.success(t("orders.cancelled"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to cancel");
     } finally {
@@ -82,7 +84,7 @@ export default function OrdersPage() {
       if (!response.ok) throw new Error(payload.error ?? "Unable to update order");
       await refresh();
       await queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
-      toast.success("Order updated");
+      toast.success(t("orders.updated"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to update order");
     } finally {
@@ -93,25 +95,25 @@ export default function OrdersPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Orders"
-        description="Track every table, QR, waiter, and cashier order in real time."
+        title={t("orders.title")}
+        description={t("orders.subtitle")}
         actions={
           <Button variant="secondary" onClick={() => void refresh()}>
             <RefreshCw className="h-4 w-4" />
-            Refresh
+            {t("common.refresh")}
           </Button>
         }
       />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Active orders" value={stats.active} icon={ShoppingCart} />
-        <StatCard label="Pending confirmation" value={stats.pending} icon={AlertCircle} tone="warning" />
-        <StatCard label="Ready to serve" value={stats.ready} icon={Clock3} tone="success" />
-        <StatCard label="Order value" value={formatCurrency(stats.revenue)} icon={ShoppingCart} tone="info" />
+        <StatCard label={t("orders.activeOrders")} value={stats.active} icon={ShoppingCart} />
+        <StatCard label={t("orders.pendingConfirmation")} value={stats.pending} icon={AlertCircle} tone="warning" />
+        <StatCard label={t("orders.readyToServe")} value={stats.ready} icon={Clock3} tone="success" />
+        <StatCard label={t("orders.orderValue")} value={formatCurrency(stats.revenue)} icon={ShoppingCart} tone="info" />
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-64 flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search order, table, customer" value={search} onChange={(event) => setSearch(event.target.value)} />
+          <Input className="pl-9" placeholder={t("orders.searchPlaceholder")} value={search} onChange={(event) => setSearch(event.target.value)} />
         </div>
         <Select value={status} onChange={(event) => setStatus(event.target.value as OrderStatus | "all")} className="w-48">
           <option value="all">All statuses</option>
@@ -144,15 +146,15 @@ export default function OrdersPage() {
           ))}
         </div>
       ) : (
-        <EmptyState icon={ShoppingCart} title="No orders in this view" description="Change filters or create a waiter order to start service." />
+        <EmptyState icon={ShoppingCart} title={t("orders.noneTitle")} description={t("orders.noneHint")} />
       )}
       <ConfirmDialog
         open={!!cancelId}
         onOpenChange={(open) => !open && setCancelId(null)}
-        title="Cancel this order?"
-        description="The order and its items will be cancelled and the table freed. This cannot be undone."
-        confirmLabel="Cancel order"
-        cancelLabel="Keep order"
+        title={t("orders.cancelConfirmTitle")}
+        description={t("orders.cancelConfirmBody")}
+        confirmLabel={t("orders.cancelOrder")}
+        cancelLabel={t("orders.keepOrder")}
         onConfirm={() => cancelId && void cancelOrder(cancelId)}
       />
     </div>

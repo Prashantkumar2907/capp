@@ -18,9 +18,11 @@ import { PageHeader } from "@/components/shared/page-header";
 import { createClient } from "@/lib/supabase/client";
 import { clientEnv } from "@/lib/env";
 import { useAuth } from "@/features/auth/auth-provider";
+import { useT } from "@/lib/i18n";
 import type { RestaurantTable } from "@/types/database";
 
 export default function TablesPage() {
+  const t = useT();
   const { branch } = useAuth();
   const [supabase] = useState(() => createClient());
   const queryClient = useQueryClient();
@@ -74,7 +76,7 @@ export default function TablesPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Tables" description={`${counts.available} available | ${counts.occupied} occupied | ${counts.total} total`} actions={<Button onClick={() => setAddOpen(true)}><Plus className="h-4 w-4" />Add table</Button>} />
+      <PageHeader title={t("tables.title")} description={`${counts.available} available | ${counts.occupied} occupied | ${counts.total} total`} actions={<Button onClick={() => setAddOpen(true)}><Plus className="h-4 w-4" />{t("tables.addTable")}</Button>} />
       {tables.isLoading ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{Array.from({ length: 8 }).map((_, index) => <Skeleton key={index} className="h-44" />)}</div>
       ) : tables.data?.length ? (
@@ -94,9 +96,9 @@ export default function TablesPage() {
                 </div>
                 <div className="mt-4">
                   <Select value={table.status} onChange={(event) => updateStatus.mutate({ table, status: event.target.value as RestaurantTable["status"] })}>
-                    <option value="available">Available</option>
-                    <option value="occupied">Occupied</option>
-                    <option value="reserved">Reserved</option>
+                    <option value="available">{t("tables.available")}</option>
+                    <option value="occupied">{t("tables.occupied")}</option>
+                    <option value="reserved">{t("tables.reserved")}</option>
                     <option value="inactive">Inactive</option>
                   </Select>
                 </div>
@@ -109,9 +111,9 @@ export default function TablesPage() {
           ))}
         </div>
       ) : (
-        <EmptyState icon={Table2} title="No tables yet" description="Create tables to generate customer QR order links." actionLabel="Add table" onAction={() => setAddOpen(true)} />
+        <EmptyState icon={Table2} title={t("tables.noneTitle")} description={t("tables.noneHint")} actionLabel={t("tables.addTable")} onAction={() => setAddOpen(true)} />
       )}
-      <Dialog open={addOpen} title="Add table" onOpenChange={setAddOpen}>
+      <Dialog open={addOpen} title={t("tables.addTable")} onOpenChange={setAddOpen}>
         <div className="space-y-3">
           <Field label="Label"><Input value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value })} placeholder="Window table" /></Field>
           <Field label="Capacity"><Input type="number" value={form.capacity} onChange={(event) => setForm({ ...form, capacity: Number(event.target.value) })} /></Field>

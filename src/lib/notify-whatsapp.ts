@@ -92,3 +92,27 @@ export function orderReadyMessage(orderNumber: string, restaurantName: string, r
     .filter(Boolean)
     .join("\n");
 }
+
+/** Daily owner summary — yesterday's numbers, the ping that keeps owners engaged without opening the app. */
+export function dailySummaryMessage(params: {
+  restaurantName: string;
+  date: string;
+  revenue: number;
+  orders: number;
+  topDish?: string | null;
+  avgRating?: number | null;
+}) {
+  const rupees = (value: number) => `₹${Math.round(value).toLocaleString("en-IN")}`;
+  return [
+    `📊 ${params.restaurantName} — ${params.date}`,
+    ``,
+    `Sales: ${rupees(params.revenue)}`,
+    `Orders: ${params.orders}`,
+    params.topDish ? `Top dish: ${params.topDish}` : null,
+    params.avgRating ? `Rating: ${params.avgRating.toFixed(1)}★` : null,
+    ``,
+    `Have a great day! 🙏`,
+  ]
+    .filter((line) => line !== null)
+    .join("\n");
+}
