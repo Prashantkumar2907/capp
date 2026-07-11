@@ -179,6 +179,9 @@ export type Organization = {
   gst_number: string | null;
   default_tax_percent: number;
   tax_inclusive: boolean;
+  fssai_license?: string | null;
+  service_charge_percent?: number;
+  gst_scheme?: "regular" | "composition";
   plan: string;
   subscription_status: string;
   settings: Json;
@@ -273,9 +276,11 @@ export type Order = {
   order_source: "waiter" | "qr_customer" | "cashier";
   status: "pending" | "confirmed" | "preparing" | "ready" | "served" | "cancelled";
   subtotal: number;
+  service_charge?: number;
   tax: number;
   discount: number;
   total: number;
+  invoice_number?: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;

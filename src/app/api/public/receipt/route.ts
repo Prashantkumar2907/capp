@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   const admin = createAdminSupabase();
   const { data: order, error } = await admin
     .from("orders")
-    .select("*, order_items(*), payments(*), branches(*, organizations(name, default_tax_percent, tax_inclusive))")
+    .select("*, order_items(*), payments(*), branches(*, organizations(name, default_tax_percent, tax_inclusive, gst_number, fssai_license, gst_scheme, service_charge_percent))")
     .eq("id", orderId)
     .single();
 

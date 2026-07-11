@@ -19,7 +19,7 @@ interface PublicMenuMeta {
   branch: {
     id: string;
     name: string;
-    organizations: { name: string; default_tax_percent: number; tax_inclusive: boolean } | null;
+    organizations: { name: string; default_tax_percent: number; tax_inclusive: boolean; service_charge_percent?: number; gst_scheme?: "regular" | "composition" } | null;
   };
 }
 
@@ -47,8 +47,11 @@ export default function PublicPaymentPage() {
 
   const subtotal = cart.subtotal();
   const totals = useMemo(
-    () => calculateTotals(subtotal, Number(meta.data?.branch.organizations?.default_tax_percent ?? 5), Boolean(meta.data?.branch.organizations?.tax_inclusive ?? true)),
-    [meta.data?.branch.organizations?.default_tax_percent, meta.data?.branch.organizations?.tax_inclusive, subtotal]
+    () => calculateTotals(subtotal, Number(meta.data?.branch.organizations?.default_tax_percent ?? 5), Boolean(meta.data?.branch.organizations?.tax_inclusive ?? true), 0, {
+      serviceChargePercent: Number(meta.data?.branch.organizations?.service_charge_percent ?? 0),
+      composition: meta.data?.branch.organizations?.gst_scheme === "composition",
+    }),
+    [meta.data?.branch.organizations, subtotal]
   );
 
   const submitOrder = async () => {
@@ -128,6 +131,7 @@ export default function PublicPaymentPage() {
           items={cart.items}
           subtotal={subtotal}
           tax={totals.tax}
+            serviceCharge={totals.serviceCharge}
           total={totals.total}
           submitLabel="Place order"
           submitting={submitting}

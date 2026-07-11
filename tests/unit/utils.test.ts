@@ -22,3 +22,24 @@ test("utility formatting keeps restaurant UI predictable", () => {
   assert.equal(formatCurrency(499), "\u20b9499");
   assert.match(upiLink({ vpa: "merchant@upi", amount: 250, reference: "ORD-1", merchant: "CAPP" }), /^upi:\/\/pay\?/);
 });
+
+test("calculateTotals applies service charge before GST (exclusive)", () => {
+  // 200 + 10% SC = 220, GST 5% on 220 = 11, total 231
+  const totals = calculateTotals(200, 5, false, 0, { serviceChargePercent: 10 });
+  assert.equal(totals.subtotal, 200);
+  assert.equal(totals.serviceCharge, 20);
+  assert.equal(totals.tax, 11);
+  assert.equal(totals.total, 231);
+});
+
+test("calculateTotals inclusive pricing: printed parts always sum to total", () => {
+  const totals = calculateTotals(200, 5, true, 0, { serviceChargePercent: 10 });
+  assert.equal(totals.subtotal + totals.serviceCharge + totals.tax, totals.total);
+});
+
+test("calculateTotals composition scheme charges no GST but keeps service charge", () => {
+  const totals = calculateTotals(200, 5, false, 0, { serviceChargePercent: 10, composition: true });
+  assert.equal(totals.tax, 0);
+  assert.equal(totals.serviceCharge, 20);
+  assert.equal(totals.total, 220);
+});

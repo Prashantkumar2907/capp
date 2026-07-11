@@ -64,27 +64,35 @@ export function orderNumber() {
   return `ORD-${date}-${entropy}`;
 }
 
-export function calculateTotals(subtotal: number, taxPercent: number, taxInclusive: boolean, discount = 0) {
+export interface TotalsOptions {
+  serviceChargePercent?: number;
+  /** composition-scheme orgs charge no GST on the invoice */
+  composition?: boolean;
+}
+
+/**
+ * Mirrors order_totals_v2() in the database (supabase/10_gst_compliance.sql).
+ * Rounding rule: each component is rounded to 2dp and the total is the SUM of
+ * the rounded components, so printed invoice lines always add up.
+ */
+export function calculateTotals(subtotal: number, taxPercent: number, taxInclusive: boolean, discount = 0, options: TotalsOptions = {}) {
+  const round2 = (value: number) => Math.round(value * 100) / 100;
   const cleanSubtotal = Math.max(0, Number(subtotal) || 0);
   const cleanDiscount = Math.max(0, Math.min(cleanSubtotal, Number(discount) || 0));
-  const taxable = cleanSubtotal - cleanDiscount;
+  const itemsTotal = cleanSubtotal - cleanDiscount;
+  const rate = options.composition ? 0 : Math.max(0, Number(taxPercent) || 0);
+  const scPercent = Math.max(0, Number(options.serviceChargePercent) || 0);
 
-  if (taxInclusive) {
-    const tax = taxable - taxable / (1 + taxPercent / 100);
-    return {
-      subtotal: Math.round((taxable - tax) * 100) / 100,
-      tax: Math.round(tax * 100) / 100,
-      discount: cleanDiscount,
-      total: Math.round(taxable * 100) / 100,
-    };
-  }
+  const ex = round2(taxInclusive && rate > 0 ? itemsTotal / (1 + rate / 100) : itemsTotal);
+  const serviceCharge = round2((ex * scPercent) / 100);
+  const tax = round2(((ex + serviceCharge) * rate) / 100);
 
-  const tax = taxable * (taxPercent / 100);
   return {
-    subtotal: taxable,
-    tax: Math.round(tax * 100) / 100,
+    subtotal: ex,
+    serviceCharge,
+    tax,
     discount: cleanDiscount,
-    total: Math.round((taxable + tax) * 100) / 100,
+    total: round2(ex + serviceCharge + tax),
   };
 }
 

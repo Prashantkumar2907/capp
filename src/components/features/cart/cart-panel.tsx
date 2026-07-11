@@ -12,6 +12,7 @@ interface CartPanelProps {
   subtotal: number;
   total?: number;
   tax?: number;
+  serviceCharge?: number;
   submitLabel: string;
   submitting?: boolean;
   disabled?: boolean;
@@ -22,7 +23,7 @@ interface CartPanelProps {
   onSubmit: () => void;
 }
 
-export function CartPanel({ items, subtotal, total, tax, submitLabel, submitting, disabled, onIncrement, onDecrement, onRemove, onNotes, onSubmit }: CartPanelProps) {
+export function CartPanel({ items, subtotal, total, tax, serviceCharge, submitLabel, submitting, disabled, onIncrement, onDecrement, onRemove, onNotes, onSubmit }: CartPanelProps) {
   return (
     <Card className="sticky top-4">
       <CardContent className="space-y-4 p-4">
@@ -78,6 +79,9 @@ export function CartPanel({ items, subtotal, total, tax, submitLabel, submitting
             <span className="text-muted-foreground">Subtotal</span>
             <span className="font-numbers">{formatCurrency(subtotal)}</span>
           </div>
+          {typeof serviceCharge === "number" && serviceCharge > 0 ? (
+            <div className="flex items-center justify-between text-xs text-muted-foreground"><span>Service charge</span><span className="font-numbers">{formatCurrency(serviceCharge)}</span></div>
+          ) : null}
           {typeof tax === "number" ? (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Taxes</span>

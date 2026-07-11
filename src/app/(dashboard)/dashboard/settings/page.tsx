@@ -24,6 +24,9 @@ export default function SettingsPage() {
     name: organization?.name ?? "",
     restaurant_type: organization?.restaurant_type ?? "casual",
     gst_number: organization?.gst_number ?? "",
+    fssai_license: organization?.fssai_license ?? "",
+    service_charge_percent: Number(organization?.service_charge_percent ?? 0),
+    gst_scheme: organization?.gst_scheme ?? "regular",
     default_tax_percent: Number(organization?.default_tax_percent ?? 5),
     tax_inclusive: organization?.tax_inclusive ?? true,
   }));
@@ -49,7 +52,7 @@ export default function SettingsPage() {
     mutationFn: async () => {
       const { error } = await supabase
         .from("organizations")
-        .update({ ...orgForm, gst_number: orgForm.gst_number || null })
+        .update({ ...orgForm, gst_number: orgForm.gst_number || null, fssai_license: orgForm.fssai_license || null })
         .eq("id", organization!.id);
       if (error) throw error;
     },
@@ -103,11 +106,23 @@ export default function SettingsPage() {
                     <option value="fine_dining">Fine dining</option>
                   </Select>
                 </Field>
-                <Field label="GST number">
+                <Field label="GST number (GSTIN)">
                   <Input value={orgForm.gst_number} onChange={(event) => setOrgForm({ ...orgForm, gst_number: event.target.value })} />
                 </Field>
-                <Field label="Default tax percent">
+                <Field label="FSSAI license no.">
+                  <Input value={orgForm.fssai_license} onChange={(event) => setOrgForm({ ...orgForm, fssai_license: event.target.value })} />
+                </Field>
+                <Field label="GST rate %">
                   <Input type="number" value={orgForm.default_tax_percent} onChange={(event) => setOrgForm({ ...orgForm, default_tax_percent: Number(event.target.value) })} />
+                </Field>
+                <Field label="Service charge % (voluntary, 0 = off)">
+                  <Input type="number" value={orgForm.service_charge_percent} onChange={(event) => setOrgForm({ ...orgForm, service_charge_percent: Math.max(0, Number(event.target.value)) })} />
+                </Field>
+                <Field label="GST scheme">
+                  <Select value={orgForm.gst_scheme} onChange={(event) => setOrgForm({ ...orgForm, gst_scheme: event.target.value as "regular" | "composition" })}>
+                    <option value="regular">Regular (charge CGST+SGST on bill)</option>
+                    <option value="composition">Composition (no GST on bill)</option>
+                  </Select>
                 </Field>
               </div>
               <div className="flex items-center justify-between rounded-2xl border p-3">

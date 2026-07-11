@@ -74,7 +74,10 @@ export default function WaiterPage() {
   }, [categoryId, menu.data?.dishes, search]);
 
   const subtotal = items.reduce((sum, item) => sum + lineUnitTotal(item) * item.quantity, 0);
-  const totals = calculateTotals(subtotal, Number(organization?.default_tax_percent ?? 5), Boolean(organization?.tax_inclusive ?? true));
+  const totals = calculateTotals(subtotal, Number(organization?.default_tax_percent ?? 5), Boolean(organization?.tax_inclusive ?? true), 0, {
+    serviceChargePercent: Number(organization?.service_charge_percent ?? 0),
+    composition: organization?.gst_scheme === "composition",
+  });
 
   const createOrder = useMutation({
     mutationFn: async () => {
@@ -321,6 +324,7 @@ export default function WaiterPage() {
                 items={items}
                 subtotal={subtotal}
                 tax={totals.tax}
+            serviceCharge={totals.serviceCharge}
                 total={totals.total}
                 submitLabel="Send to kitchen"
                 submitting={createOrder.isPending}

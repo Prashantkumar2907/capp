@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   const admin = createAdminSupabase();
   const { data: branch, error: branchError } = await admin
     .from("branches")
-    .select("*, organizations(name, default_tax_percent, tax_inclusive)")
+    .select("*, organizations(name, default_tax_percent, tax_inclusive, service_charge_percent, gst_scheme)")
     .eq("id", branchId)
     .eq("is_active", true)
     .single();

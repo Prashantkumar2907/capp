@@ -114,8 +114,17 @@ The same role-capability system serves both: small = one user holds all roles; l
 - [x] KOT kitchen polish: variant/addon/notes on tickets, cancelled lines hidden, token/takeaway labels
 Exit criterion still open: one real restaurant runs a full service day.
 
-**Phase 2 — Compliance & money.**
-GST split + GSTIN/FSSAI on receipts + invoice numbering → service charge + discounts → cash/split payments → Z-report → veg/non-veg marks → KOT thermal print (browser) → role-login provisioning UI (owner-generated credentials, server-only admin API). Exit: a restaurant can legally hand a customer our bill.
+**Phase 2 — Compliance & money.** (in progress)
+- [x] GST core (10_gst_compliance.sql): FSSAI/service-charge/scheme org fields; sequential invoice numbers per branch per FY (INV/2627/000001, assigned on payment completion via triggers, idempotent, counter table locked from clients); create_order v3 + recompute with service charge; composition scheme = no GST on bill; invoice-safe rounding (printed parts always sum to total). Tested: exclusive 200→231, composition 200→220, FY boundaries Mar/Apr, counter increments, no reassignment, open-order edits preserve SC math
+- [x] Receipt: invoice no., GSTIN, FSSAI, CGST/SGST split lines, service charge (voluntary), composition-scheme note, variant/addon display
+- [x] Settings: GSTIN/FSSAI/GST rate/service charge %/scheme fields
+- [x] calculateTotals mirrors DB math (unit-tested incl. parts-sum rule); service charge shown in cart previews (customer + waiter)
+- [ ] Cash settle with change calc + split payments UI
+- [ ] Discounts (permission-gated)
+- [ ] Z-report / day-end
+- [ ] KOT thermal print (80mm browser print)
+- [ ] Role-login provisioning UI (owner-generated credentials, server-only admin API)
+Exit: a restaurant can legally hand a customer our bill.
 
 **Phase 3 — Scale features.**
 Station routing → multi-branch analytics → WhatsApp notifications → Hindi UI → table merge/split. Exit: a 50+ cover restaurant runs on it.

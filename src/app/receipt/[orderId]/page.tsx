@@ -17,7 +17,7 @@ import type { Branch, Order, OrderItem, Payment } from "@/types/database";
 type ReceiptOrder = Order & {
   order_items: OrderItem[];
   payments: Payment[];
-  branches: (Branch & { organizations: { name: string; default_tax_percent: number; tax_inclusive: boolean } | null }) | null;
+  branches: (Branch & { organizations: { name: string; default_tax_percent: number; tax_inclusive: boolean; gst_number?: string | null; fssai_license?: string | null; gst_scheme?: "regular" | "composition"; service_charge_percent?: number } | null }) | null;
 };
 
 export default function ReceiptPage() {
@@ -95,6 +95,15 @@ export default function ReceiptPage() {
                 <p className="text-xs text-muted-foreground">{branch?.organizations?.name ?? "CAPP"}</p>
                 <h1 className="font-numbers mt-1 text-xl font-semibold">#{order.order_number}</h1>
                 <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(order.created_at)}</p>
+                {order.invoice_number ? (
+                  <p className="font-numbers mt-1 text-xs font-medium">Invoice {order.invoice_number}</p>
+                ) : null}
+                {branch?.organizations?.gst_number ? (
+                  <p className="mt-1 text-[0.65rem] text-muted-foreground">GSTIN {branch.organizations.gst_number}</p>
+                ) : null}
+                {branch?.organizations?.fssai_license ? (
+                  <p className="text-[0.65rem] text-muted-foreground">FSSAI Lic. {branch.organizations.fssai_license}</p>
+                ) : null}
               </div>
               <OrderStatusBadge status={order.status} />
             </div>
@@ -111,20 +120,39 @@ export default function ReceiptPage() {
             {order.order_items.map((item) => (
               <div key={item.id} className="flex items-start justify-between gap-3 rounded-2xl bg-secondary p-3">
                 <div>
-                  <p className="text-sm font-medium">{item.dish_name}</p>
+                  <p className="text-sm font-medium">
+                    {item.dish_name}
+                    {item.variant_name ? <span className="text-muted-foreground"> · {item.variant_name}</span> : null}
+                  </p>
+                  {Array.isArray(item.addons) && item.addons.length ? (
+                    <p className="mt-0.5 text-xs text-muted-foreground">+ {(item.addons as { name: string }[]).map((addon) => addon.name).join(", ")}</p>
+                  ) : null}
                   {item.notes ? <p className="mt-1 text-xs text-muted-foreground">{item.notes}</p> : null}
                 </div>
                 <div className="text-right">
-                  <p className="font-numbers text-sm font-semibold">{formatCurrency(Number(item.price_at_order) * item.quantity)}</p>
+                  <p className="font-numbers text-sm font-semibold">{formatCurrency((Number(item.price_at_order) + Number(item.addon_total ?? 0)) * item.quantity)}</p>
                   <p className="font-numbers text-xs text-muted-foreground">x{item.quantity}</p>
                 </div>
               </div>
             ))}
             <div className="space-y-2 border-t pt-3 text-sm">
               <Line label="Subtotal" value={formatCurrency(order.subtotal)} />
-              <Line label="Tax" value={formatCurrency(order.tax)} />
-              <Line label="Discount" value={formatCurrency(order.discount)} />
+              {Number(order.service_charge ?? 0) > 0 ? (
+                <Line label="Service charge (voluntary)" value={formatCurrency(Number(order.service_charge))} />
+              ) : null}
+              {Number(order.tax) > 0 ? (
+                <>
+                  <Line label={`CGST @ ${(Number(branch?.organizations?.default_tax_percent ?? 5) / 2).toFixed(2)}%`} value={formatCurrency(Number(order.tax) / 2)} />
+                  <Line label={`SGST @ ${(Number(branch?.organizations?.default_tax_percent ?? 5) / 2).toFixed(2)}%`} value={formatCurrency(Number(order.tax) / 2)} />
+                </>
+              ) : null}
+              {Number(order.discount) > 0 ? <Line label="Discount" value={formatCurrency(order.discount)} /> : null}
               <Line label="Total" value={formatCurrency(order.total)} strong />
+              {branch?.organizations?.gst_scheme === "composition" ? (
+                <p className="pt-1 text-[0.65rem] text-muted-foreground">
+                  Composition taxable person, not eligible to collect tax on supplies.
+                </p>
+              ) : null}
             </div>
           </CardContent>
         </Card>

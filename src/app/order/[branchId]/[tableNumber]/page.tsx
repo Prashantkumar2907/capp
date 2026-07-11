@@ -23,7 +23,7 @@ interface PublicMenu {
     name: string;
     address: string | null;
     city: string | null;
-    organizations: { name: string; default_tax_percent: number; tax_inclusive: boolean } | null;
+    organizations: { name: string; default_tax_percent: number; tax_inclusive: boolean; service_charge_percent?: number; gst_scheme?: "regular" | "composition" } | null;
   };
   table: RestaurantTable | null;
   categories: Category[];
@@ -64,7 +64,10 @@ export default function PublicOrderPage() {
   }, [categoryId, menu.data?.dishes, search]);
 
   const subtotal = cart.subtotal();
-  const totals = calculateTotals(subtotal, Number(menu.data?.branch.organizations?.default_tax_percent ?? 5), Boolean(menu.data?.branch.organizations?.tax_inclusive ?? true));
+  const totals = calculateTotals(subtotal, Number(menu.data?.branch.organizations?.default_tax_percent ?? 5), Boolean(menu.data?.branch.organizations?.tax_inclusive ?? true), 0, {
+    serviceChargePercent: Number(menu.data?.branch.organizations?.service_charge_percent ?? 0),
+    composition: menu.data?.branch.organizations?.gst_scheme === "composition",
+  });
 
   const addDish = (dish: DishWithRelations) => {
     const hasOptions = (dish.dish_variants?.length ?? 0) > 0 || (dish.dish_addons?.length ?? 0) > 0;
@@ -155,6 +158,7 @@ export default function PublicOrderPage() {
             items={cart.items}
             subtotal={subtotal}
             tax={totals.tax}
+            serviceCharge={totals.serviceCharge}
             total={totals.total}
             submitLabel="Review order"
             onIncrement={(lineId) => {
