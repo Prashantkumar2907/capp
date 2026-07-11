@@ -119,11 +119,12 @@ Exit criterion still open: one real restaurant runs a full service day.
 - [x] Receipt: invoice no., GSTIN, FSSAI, CGST/SGST split lines, service charge (voluntary), composition-scheme note, variant/addon display
 - [x] Settings: GSTIN/FSSAI/GST rate/service charge %/scheme fields
 - [x] calculateTotals mirrors DB math (unit-tested incl. parts-sum rule); service charge shown in cart previews (customer + waiter)
-- [ ] Cash settle with change calc + split payments UI
-- [ ] Discounts (permission-gated)
-- [ ] Z-report / day-end
-- [ ] KOT thermal print (80mm browser print)
-- [ ] Role-login provisioning UI (owner-generated credentials, server-only admin API)
+- [x] Role-login provisioning: POST/PATCH /api/staff/provision (owner/admin only, service-role server-side, synthetic handle@org-slug.staff.capp.app emails for staff without email, auth-user rollback if staff insert fails); staff page rebuilt — multi-role checkbox picker, generated readable passwords, credentials hand-over screen, password reset, deactivate/reactivate instead of delete, role badges from staff_roles
+- [x] Cash settle: settle dialog with method picker + cash tendered/change calculation (blocks short payments); completing payment auto-assigns GST invoice number via DB trigger
+- [x] Z-report: day summary (cash-in-drawer/UPI/card split, settled count, pending) with print
+- [x] KOT thermal print: 80mm browser-print ticket (variant, addons, notes, counter token) from kitchen tickets — works with any thermal printer installed as a system printer
+- [ ] Split payments UI (schema already supports N payments/order)
+- [ ] Discounts (permission-gated, needs order_totals discount pass)
 Exit: a restaurant can legally hand a customer our bill.
 
 **Phase 3 — Scale features.**

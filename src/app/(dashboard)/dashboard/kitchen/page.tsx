@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChefHat, Flame, RefreshCw, Timer, Utensils } from "lucide-react";
+import { ChefHat, Flame, Printer, RefreshCw, Timer, Utensils } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { orderStatusLabels, type OrderStatus } from "@/lib/constants";
 import { timeAgo } from "@/lib/utils";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
 import { useAuth } from "@/features/auth/auth-provider";
+import { printKot } from "@/lib/print-kot";
 import type { OrderWithItems } from "@/types/database";
 
 const columns: Array<{ key: OrderStatus; title: string; action?: OrderStatus; actionLabel?: string }> = [
@@ -23,7 +24,7 @@ const columns: Array<{ key: OrderStatus; title: string; action?: OrderStatus; ac
 ];
 
 export default function KitchenPage() {
-  const { branch } = useAuth();
+  const { branch, organization } = useAuth();
   const { orders, loading, error, refresh } = useRealtimeOrders(branch?.id);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -103,8 +104,13 @@ export default function KitchenPage() {
                                 {timeAgo(order.created_at)}
                               </p>
                             </div>
-                            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-warning/10 text-warning">
-                              <Flame className="h-4 w-4" />
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="icon" className="h-9 w-9" title="Print KOT" onClick={() => printKot(order, organization?.name)}>
+                                <Printer className="h-4 w-4" />
+                              </Button>
+                              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-warning/10 text-warning">
+                                <Flame className="h-4 w-4" />
+                              </div>
                             </div>
                           </div>
                           <div className="space-y-2">

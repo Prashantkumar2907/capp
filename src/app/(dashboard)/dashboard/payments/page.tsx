@@ -2,13 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Banknote, CheckCircle2, CreditCard, ExternalLink, IndianRupee, RefreshCw, Search } from "lucide-react";
+import { Banknote, CheckCircle2, CreditCard, ExternalLink, FileText, IndianRupee, Printer, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Dialog } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
@@ -17,6 +19,8 @@ import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, formatDateTime, upiLink } from "@/lib/utils";
 import { useAuth } from "@/features/auth/auth-provider";
 import type { Order, Payment } from "@/types/database";
+
+type SettleMethod = "cash" | "upi" | "card";
 
 type PaymentRow = Payment & { orders: Pick<Order, "order_number" | "table_number" | "customer_name" | "total" | "status"> | null };
 type PaymentStatusFilter = "all" | Payment["status"];
@@ -27,6 +31,10 @@ export default function PaymentsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<PaymentStatusFilter>("all");
+  const [settling, setSettling] = useState<PaymentRow | null>(null);
+  const [settleMethod, setSettleMethod] = useState<SettleMethod>("cash");
+  const [tendered, setTendered] = useState("");
+  const [zOpen, setZOpen] = useState(false);
 
   const payments = useQuery({
     queryKey: ["payments", branch?.id],
@@ -44,10 +52,14 @@ export default function PaymentsPage() {
   });
 
   const updatePayment = useMutation({
-    mutationFn: async ({ payment, nextStatus }: { payment: PaymentRow; nextStatus: Payment["status"] }) => {
+    mutationFn: async ({ payment, nextStatus, method }: { payment: PaymentRow; nextStatus: Payment["status"]; method?: SettleMethod }) => {
       const { error } = await supabase
         .from("payments")
-        .update({ status: nextStatus, transaction_id: payment.transaction_id || `manual-${Date.now()}` })
+        .update({
+          status: nextStatus,
+          ...(method ? { method } : {}),
+          transaction_id: payment.transaction_id || `manual-${Date.now()}`,
+        })
         .eq("id", payment.id);
       if (error) throw error;
     },
@@ -83,10 +95,16 @@ export default function PaymentsPage() {
         title="Payments"
         description="Cashier desk for UPI, cash, card, and Razorpay settlements."
         actions={
-          <Button variant="secondary" onClick={() => void payments.refetch()}>
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
+          <>
+            <Button variant="secondary" onClick={() => setZOpen(true)}>
+              <FileText className="h-4 w-4" />
+              Day report
+            </Button>
+            <Button variant="secondary" onClick={() => void payments.refetch()}>
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+          </>
         }
       />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -146,8 +164,8 @@ export default function PaymentsPage() {
                       </a>
                     ) : null}
                     {payment.status !== "completed" ? (
-                      <Button size="sm" disabled={updatePayment.isPending} onClick={() => updatePayment.mutate({ payment, nextStatus: "completed" })}>
-                        Mark paid
+                      <Button size="sm" disabled={updatePayment.isPending} onClick={() => { setSettleMethod("cash"); setTendered(""); setSettling(payment); }}>
+                        Settle
                       </Button>
                     ) : null}
                     {payment.status === "pending" ? (
@@ -164,6 +182,108 @@ export default function PaymentsPage() {
       ) : (
         <EmptyState icon={CreditCard} title="No payments found" description="Payments are created automatically when orders are placed." />
       )}
+
+      {/* Settle dialog: method + cash change calculation */}
+      <Dialog open={!!settling} title={`Settle #${settling?.orders?.order_number ?? ""}`} onOpenChange={(open) => !open && setSettling(null)}>
+        {settling ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between rounded-2xl border bg-secondary p-3">
+              <span className="text-sm">Amount due</span>
+              <span className="font-numbers text-lg font-semibold">{formatCurrency(Number(settling.amount))}</span>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Payment method</Label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(["cash", "upi", "card"] as SettleMethod[]).map((method) => (
+                  <button key={method} type="button" onClick={() => setSettleMethod(method)} className={`rounded-xl border px-3 py-2 text-sm capitalize transition-colors ${settleMethod === method ? "border-primary bg-primary/10" : "bg-card hover:border-primary/40"}`}>
+                    {method}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {settleMethod === "cash" ? (
+              <div className="space-y-1.5">
+                <Label>Cash received</Label>
+                <Input type="number" inputMode="numeric" placeholder="500" value={tendered} onChange={(event) => setTendered(event.target.value)} />
+                {Number(tendered) >= Number(settling.amount) ? (
+                  <p className="rounded-xl bg-success/10 px-3 py-2 text-sm font-medium text-success">
+                    Return change: {formatCurrency(Number(tendered) - Number(settling.amount))}
+                  </p>
+                ) : tendered ? (
+                  <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    Short by {formatCurrency(Number(settling.amount) - Number(tendered))}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            <Button
+              className="w-full"
+              size="lg"
+              disabled={updatePayment.isPending || (settleMethod === "cash" && Number(tendered) < Number(settling.amount))}
+              onClick={() => {
+                updatePayment.mutate({ payment: settling, nextStatus: "completed", method: settleMethod });
+                setSettling(null);
+              }}
+            >
+              Confirm payment received
+            </Button>
+          </div>
+        ) : null}
+      </Dialog>
+
+      {/* Z-report: day-end summary */}
+      <Dialog open={zOpen} title="Day report" onOpenChange={setZOpen} className="max-w-md">
+        <DaySummary payments={payments.data ?? []} />
+      </Dialog>
+    </div>
+  );
+}
+
+/** Z-report: today's collections split by method, plus pending. Print-friendly. */
+function DaySummary({ payments }: { payments: PaymentRow[] }) {
+  const today = new Date();
+  const isToday = (value: string) => {
+    const date = new Date(value);
+    return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth() && date.getDate() === today.getDate();
+  };
+  const rows = payments.filter((payment) => isToday(payment.created_at));
+  const completed = rows.filter((payment) => payment.status === "completed");
+  const byMethod = (method: Payment["method"]) => completed.filter((payment) => payment.method === method).reduce((sum, payment) => sum + Number(payment.amount), 0);
+  const totals = {
+    cash: byMethod("cash"),
+    upi: byMethod("upi"),
+    card: byMethod("card"),
+    razorpay: byMethod("razorpay"),
+    pending: rows.filter((payment) => payment.status === "pending").reduce((sum, payment) => sum + Number(payment.amount), 0),
+  };
+  const grand = totals.cash + totals.upi + totals.card + totals.razorpay;
+
+  return (
+    <div className="space-y-3" id="z-report">
+      <p className="text-xs text-muted-foreground">{formatDateTime(today.toISOString())} · {completed.length} settled bills</p>
+      <div className="space-y-2 rounded-2xl border p-3 text-sm">
+        <ReportLine label="Cash in drawer" value={formatCurrency(totals.cash)} />
+        <ReportLine label="UPI" value={formatCurrency(totals.upi)} />
+        <ReportLine label="Card" value={formatCurrency(totals.card)} />
+        {totals.razorpay > 0 ? <ReportLine label="Razorpay" value={formatCurrency(totals.razorpay)} /> : null}
+        <div className="border-t pt-2">
+          <ReportLine label="Total collected" value={formatCurrency(grand)} strong />
+        </div>
+        {totals.pending > 0 ? <ReportLine label="Still pending" value={formatCurrency(totals.pending)} /> : null}
+      </div>
+      <Button className="w-full" variant="secondary" onClick={() => window.print()}>
+        <Printer className="h-4 w-4" />
+        Print
+      </Button>
+    </div>
+  );
+}
+
+function ReportLine({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className={`flex items-center justify-between ${strong ? "font-semibold" : ""}`}>
+      <span>{label}</span>
+      <span className="font-numbers">{value}</span>
     </div>
   );
 }
