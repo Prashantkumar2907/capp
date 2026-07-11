@@ -31,7 +31,8 @@ export async function proxy(request: NextRequest) {
     path.startsWith("/auth/callback") ||
     path.startsWith("/order/") ||
     path.startsWith("/receipt/") ||
-    path.startsWith("/api/");
+    path.startsWith("/api/") ||
+    path.startsWith("/manifest");
 
   if (!user && !publicPath) {
     const url = request.nextUrl.clone();

@@ -4,12 +4,14 @@ import Link from "next/link";
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Clock, ExternalLink, ReceiptText, Star, Table2 } from "lucide-react";
+import { CheckCircle2, Clock, ExternalLink, ReceiptText, Star, Table2, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { OrderStatusBadge } from "@/components/shared/status-badge";
+import { OrderProgress } from "@/components/features/orders/order-progress";
+import { printBill } from "@/lib/print-bill";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, formatDateTime, upiLink } from "@/lib/utils";
 import type { Branch, Order, OrderItem, Payment } from "@/types/database";
@@ -36,7 +38,7 @@ export default function ReceiptPage() {
       return payload.order;
     },
     enabled: !!orderId,
-    refetchInterval: 15000,
+    refetchInterval: (query) => { const s = query.state.data?.status; return s && ["served","cancelled"].includes(s) ? 60000 : 8000; },
   });
 
   const feedback = useMutation({
@@ -105,8 +107,20 @@ export default function ReceiptPage() {
                   <p className="text-[0.65rem] text-muted-foreground">FSSAI Lic. {branch.organizations.fssai_license}</p>
                 ) : null}
               </div>
-              <OrderStatusBadge status={order.status} />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="rounded-full border bg-card p-2 text-muted-foreground transition-colors hover:text-foreground print:hidden"
+                  aria-label="Print or save bill"
+                  title="Print / save bill"
+                >
+                  <Printer className="h-4 w-4" />
+                </button>
+                <OrderStatusBadge status={order.status} />
+              </div>
             </div>
+            <OrderProgress status={order.status} />
             <div className="grid gap-3 sm:grid-cols-3">
               <MiniStat icon={Table2} label="Table" value={order.table_number ? String(order.table_number) : "Takeaway"} />
               <MiniStat icon={Clock} label="Status" value={order.status} />

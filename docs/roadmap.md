@@ -150,6 +150,17 @@ Exit: a 50+ cover restaurant runs on it.
 - [ ] LIVE: create the three plans in the Razorpay dashboard, set env, run a real checkout
 Exit: first paid subscription.
 
+**Quality pass (post-Phase 4): E2E testing + base-gap fill + UX polish.**
+- [x] Full-day E2E simulation on real schema: onboard → menu/variants → QR order (₹300.30 exact) → kitchen flow → waiter adds round (₹392.70) → discount (₹346.50) → split settle (cash+UPI, invoice 000001) → serve → counter token + takeaway → sequential invoices 000001-3 → Z-report sums to the paisa → stock-out blocks orders
+- [x] BUG found by E2E + fixed: table occupancy only maintained in the API route — any other write path leaked 'occupied' tables forever. 15_table_status_trigger.sql recomputes from ground truth on every order status/table change (tested: serve frees, move frees old + occupies new, two-orders-one-table stays occupied, reserved/inactive untouched)
+- [x] Customer GST bill print (print-bill.ts): 80mm bill with invoice no, GSTIN, FSSAI, CGST/SGST split, service charge, composition note — printer button on every payment row. The cashier could print a KOT but not a BILL before this
+- [x] Customer order tracking: animated progress stepper on the receipt (Placed→Accepted→Cooking→Ready→Served) with pulsing current step + status message; poll tightened to 8s while active, 60s once closed; print/save button
+- [x] Kitchen audio alerts (use-kitchen-alert): two-tone WebAudio chime + tab-title flash on new pending tickets — zero asset files, autoplay-policy safe. Docs claimed this existed; code had none
+- [x] FSSAI food-type marks: proper green-square/dot (veg) + brown-square/triangle (non-veg) SVG replacing the leaf-only icon; "Veg only" filter chip on the customer menu
+- [x] PWA: manifest + app icon so the kitchen tablet installs CAPP full-screen; found + fixed proxy blocking /manifest.webmanifest with an auth redirect
+- [x] Motion (framer-motion was installed but never used): kitchen tickets spring in/out across columns with layout animation; Counter live orders animate in/out
+- Deferred: realtime connection-lost indicator (needs channel-status plumbing through use-realtime-orders)
+
 **Phase 5 — Earned expansions.** Aggregators, inventory, more languages — driven by paying-customer demand only.
 
 ---

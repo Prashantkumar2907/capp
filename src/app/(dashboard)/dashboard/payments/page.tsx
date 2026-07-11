@@ -18,11 +18,12 @@ import { StatCard } from "@/components/shared/stat-card";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, formatDateTime, upiLink } from "@/lib/utils";
 import { useAuth } from "@/features/auth/auth-provider";
+import { printBill } from "@/lib/print-bill";
 import type { Order, Payment } from "@/types/database";
 
 type SettleMethod = "cash" | "upi" | "card";
 
-type PaymentRow = Payment & { orders: Pick<Order, "order_number" | "table_number" | "customer_name" | "total" | "status"> | null };
+type PaymentRow = Payment & { orders: (Order & { order_items: import("@/types/database").OrderItem[] }) | null };
 type PaymentStatusFilter = "all" | Payment["status"];
 
 export default function PaymentsPage() {
@@ -42,7 +43,7 @@ export default function PaymentsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("payments")
-        .select("*, orders(order_number, table_number, customer_name, total, status)")
+        .select("*, orders(*, order_items(*))")
         .eq("branch_id", branch!.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -186,6 +187,22 @@ export default function PaymentsPage() {
                           UPI
                         </Button>
                       </a>
+                    ) : null}
+                    {payment.orders ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title="Print customer bill"
+                        onClick={() => payment.orders && printBill(payment.orders, {
+                          name: organization?.name,
+                          gst_number: organization?.gst_number,
+                          fssai_license: organization?.fssai_license,
+                          gst_scheme: organization?.gst_scheme,
+                          default_tax_percent: organization?.default_tax_percent,
+                        }, branch?.name)}
+                      >
+                        <Printer className="h-4 w-4" />
+                      </Button>
                     ) : null}
                     {payment.status !== "completed" ? (
                       <Button size="sm" disabled={updatePayment.isPending} onClick={() => { setSettleMethod("cash"); setTendered(""); setCollectAmount(String(payment.amount)); setSettling(payment); }}>

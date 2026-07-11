@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DishTile } from "@/components/features/menu/dish-tile";
 import { DishOptionsDialog } from "@/components/features/menu/dish-options-dialog";
+import { FssaiMark } from "@/components/features/menu/fssai-mark";
 import { CartPanel } from "@/components/features/cart/cart-panel";
 import { calculateTotals } from "@/lib/utils";
 import { useCartStore } from "@/stores/cart-store";
@@ -39,6 +40,7 @@ export default function PublicOrderPage() {
   const [categoryId, setCategoryId] = useState("all");
   const cart = useCartStore();
   const [optionsDish, setOptionsDish] = useState<DishWithRelations | null>(null);
+  const [vegOnly, setVegOnly] = useState(false);
 
   useEffect(() => {
     if (branchId && tableNumber) cart.setContext(branchId, tableNumber);
@@ -57,11 +59,12 @@ export default function PublicOrderPage() {
 
   const dishes = useMemo(() => {
     return (menu.data?.dishes ?? []).filter((dish) => {
+      if (vegOnly && !dish.is_veg) return false;
       if (search && !dish.name.toLowerCase().includes(search.toLowerCase())) return false;
       if (categoryId !== "all" && dish.category_id !== categoryId) return false;
       return true;
     });
-  }, [categoryId, menu.data?.dishes, search]);
+  }, [categoryId, menu.data?.dishes, search, vegOnly]);
 
   const subtotal = cart.subtotal();
   const totals = calculateTotals(subtotal, Number(menu.data?.branch.organizations?.default_tax_percent ?? 5), Boolean(menu.data?.branch.organizations?.tax_inclusive ?? true), 0, {
@@ -116,6 +119,17 @@ export default function PublicOrderPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input className="pl-9" placeholder="Search the menu" value={search} onChange={(event) => setSearch(event.target.value)} />
+              </div>
+              <div className="flex items-center">
+                <button
+                  type="button"
+                  onClick={() => setVegOnly((previous) => !previous)}
+                  aria-pressed={vegOnly}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium transition-colors ${vegOnly ? "border-success bg-success/10 text-success" : "bg-card text-muted-foreground"}`}
+                >
+                  <FssaiMark isVeg className="h-3 w-3" />
+                  Veg only
+                </button>
               </div>
             </CardContent>
           </Card>

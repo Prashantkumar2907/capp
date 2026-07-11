@@ -21,6 +21,7 @@ import { type OrderStatus } from "@/lib/constants";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
 import { useAuth } from "@/features/auth/auth-provider";
 import { useT } from "@/lib/i18n";
+import { motion, AnimatePresence } from "framer-motion";
 
 /**
  * The Counter — everything a small restaurant needs on one screen:
@@ -116,14 +117,24 @@ export default function CounterPage() {
             </div>
           ) : activeOrders.length ? (
             <div className="grid gap-3">
-              {activeOrders.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  busy={busyId === order.id}
-                  onStatusChange={(nextStatus) => void updateStatus(order.id, nextStatus)}
-                />
-              ))}
+              <AnimatePresence initial={false} mode="popLayout">
+                {activeOrders.map((order) => (
+                  <motion.div
+                    key={order.id}
+                    layout
+                    initial={{ opacity: 0, y: -14, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.96 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 28 }}
+                  >
+                    <OrderCard
+                      order={order}
+                      busy={busyId === order.id}
+                      onStatusChange={(nextStatus) => void updateStatus(order.id, nextStatus)}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             </div>
           ) : (
             <EmptyState

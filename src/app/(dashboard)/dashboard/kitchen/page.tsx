@@ -18,6 +18,8 @@ import { createClient } from "@/lib/supabase/client";
 import { Select } from "@/components/ui/select";
 import { printKot } from "@/lib/print-kot";
 import { useT } from "@/lib/i18n";
+import { useKitchenAlert } from "@/hooks/use-kitchen-alert";
+import { motion, AnimatePresence } from "framer-motion";
 import type { OrderWithItems } from "@/types/database";
 
 const columns: Array<{ key: OrderStatus; title: string; action?: OrderStatus; actionLabel?: string }> = [
@@ -46,6 +48,8 @@ export default function KitchenPage() {
   const itemMatchesStation = (item: { station_id?: string | null }) => stationId === "all" || item.station_id === stationId;
   const { orders, loading, error, refresh } = useRealtimeOrders(branch?.id);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  useKitchenAlert(orders.filter((order) => order.status === "pending").length);
 
   const kitchenOrders = useMemo(
     () =>
@@ -130,9 +134,18 @@ export default function KitchenPage() {
                   <OrderStatusBadge status={column.key} />
                 </header>
                 <div className="scrollable-inner space-y-3 p-3">
+                  <AnimatePresence initial={false} mode="popLayout">
                   {rows.length ? (
                     rows.map((order) => (
-                      <Card key={order.id} className="border-primary/15">
+                      <motion.div
+                        key={order.id}
+                        layout
+                        initial={{ opacity: 0, scale: 0.92, y: -12 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, x: 24 }}
+                        transition={{ type: "spring", stiffness: 320, damping: 26 }}
+                      >
+                      <Card className="border-primary/15">
                         <CardContent className="space-y-4 p-4">
                           <div className="flex items-start justify-between gap-3">
                             <div>
@@ -181,10 +194,12 @@ export default function KitchenPage() {
                           ) : null}
                         </CardContent>
                       </Card>
+                      </motion.div>
                     ))
                   ) : (
                     <div className="rounded-2xl border border-dashed bg-card p-6 text-center text-xs text-muted-foreground">No tickets here.</div>
                   )}
+                  </AnimatePresence>
                 </div>
               </section>
             );

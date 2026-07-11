@@ -1,5 +1,6 @@
 "use client";
 
+import { FssaiMark } from "@/components/features/menu/fssai-mark";
 import { Leaf, Minus, Plus, Timer, UtensilsCrossed } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,7 +37,7 @@ export function DishTile({ dish, quantity = 0, disabled, onAdd, onRemove, classN
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <h3 className="truncate text-sm font-semibold">{dish.name}</h3>
-                {dish.is_veg ? <Leaf className="h-3.5 w-3.5 shrink-0 text-success" /> : null}
+                <FssaiMark isVeg={!!dish.is_veg} />
               </div>
               <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{dish.description || dish.categories?.name || "Fresh from the kitchen"}</p>
             </div>
