@@ -26,25 +26,25 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn, initials } from "@/lib/utils";
-import { roleLabels, type Role } from "@/lib/constants";
+import { roleLabels, roleAccess } from "@/lib/constants";
 import { useAuth } from "@/features/auth/auth-provider";
 
-const navItems: Array<{ href: string; label: string; icon: React.ComponentType<{ className?: string }>; roles: Role[] }> = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard, roles: ["owner", "admin", "manager", "waiter", "kitchen", "cashier"] },
-  { href: "/dashboard/orders", label: "Orders", icon: ShoppingCart, roles: ["owner", "admin", "manager", "waiter", "kitchen", "cashier"] },
-  { href: "/dashboard/kitchen", label: "Kitchen", icon: ChefHat, roles: ["owner", "admin", "manager", "kitchen"] },
-  { href: "/dashboard/waiter", label: "Waiter", icon: ClipboardList, roles: ["owner", "admin", "manager", "waiter"] },
-  { href: "/dashboard/payments", label: "Payments", icon: CreditCard, roles: ["owner", "admin", "manager", "cashier"] },
-  { href: "/dashboard/menu", label: "Menu", icon: UtensilsCrossed, roles: ["owner", "admin", "manager"] },
-  { href: "/dashboard/tables", label: "Tables", icon: Table2, roles: ["owner", "admin", "manager", "waiter"] },
-  { href: "/dashboard/branches", label: "Branches", icon: Store, roles: ["owner", "admin"] },
-  { href: "/dashboard/staff", label: "Staff", icon: Users, roles: ["owner", "admin"] },
-  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3, roles: ["owner", "admin", "manager", "cashier"] },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings, roles: ["owner", "admin", "manager", "waiter", "kitchen", "cashier"] },
+const navItems: Array<{ href: string; label: string; icon: React.ComponentType<{ className?: string }>; resource: keyof typeof roleAccess }> = [
+  { href: "/dashboard", label: "Counter", icon: LayoutDashboard, resource: "dashboard" },
+  { href: "/dashboard/orders", label: "Orders", icon: ShoppingCart, resource: "orders" },
+  { href: "/dashboard/kitchen", label: "Kitchen", icon: ChefHat, resource: "kitchen" },
+  { href: "/dashboard/waiter", label: "Waiter", icon: ClipboardList, resource: "waiter" },
+  { href: "/dashboard/payments", label: "Payments", icon: CreditCard, resource: "payments" },
+  { href: "/dashboard/menu", label: "Menu", icon: UtensilsCrossed, resource: "menu" },
+  { href: "/dashboard/tables", label: "Tables", icon: Table2, resource: "tables" },
+  { href: "/dashboard/branches", label: "Branches", icon: Store, resource: "branches" },
+  { href: "/dashboard/staff", label: "Staff", icon: Users, resource: "staff" },
+  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3, resource: "analytics" },
+  { href: "/dashboard/settings", label: "Settings", icon: Settings, resource: "settings" },
 ];
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
-  const { user, staff, organization, branch, loading, role, signOut } = useAuth();
+  const { user, staff, organization, branch, loading, role, roles, canAccess, signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
@@ -55,7 +55,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     if (!loading && user && !staff) router.push("/onboarding");
   }, [loading, user, staff, router, pathname]);
 
-  const visibleNav = useMemo(() => navItems.filter((item) => role && item.roles.includes(role)), [role]);
+  const visibleNav = useMemo(() => navItems.filter((item) => canAccess(item.resource)), [canAccess]);
   const page = visibleNav.find((item) => pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))) ?? visibleNav[0];
 
   if (loading || !user || !staff || !role) {
@@ -132,13 +132,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">{page?.label ?? "Dashboard"}</p>
               <p className="hidden truncate text-xs text-muted-foreground sm:block">
-                {roleLabels[role]} at {branch?.name ?? organization?.name ?? "restaurant"}
+                {roleSummary(role, roles)} at {branch?.name ?? organization?.name ?? "restaurant"}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
             <Badge variant="secondary" className="hidden sm:inline-flex">
-              {roleLabels[role]}
+              {roleSummary(role, roles)}
             </Badge>
             <Button variant="ghost" size="icon" aria-label="Notifications">
               <Bell className="h-4 w-4" />
@@ -171,4 +171,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </section>
     </div>
   );
+}
+
+/**
+ * Compact role display: "Owner" for one role, "Owner +2" when the person
+ * wears several hats (the solo-operator case common in small restaurants).
+ */
+function roleSummary(primary: import("@/lib/constants").Role | null, roles: import("@/lib/constants").Role[]) {
+  if (!primary) return "";
+  const extra = roles.filter((held) => held !== primary).length;
+  return extra > 0 ? `${roleLabels[primary]} +${extra}` : roleLabels[primary];
 }

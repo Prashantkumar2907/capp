@@ -68,9 +68,9 @@ export default function PublicPaymentPage() {
           notes,
           items: cart.items.map((item) => ({
             dish_id: item.dish_id,
-            dish_name: item.dish_name,
             quantity: item.quantity,
-            price_at_order: item.unit_price,
+            variant_id: item.variant_id ?? null,
+            addon_ids: item.addon_ids ?? [],
             notes: item.notes,
           })),
         }),
@@ -131,11 +131,11 @@ export default function PublicPaymentPage() {
           total={totals.total}
           submitLabel="Place order"
           submitting={submitting}
-          onIncrement={(dishId) => {
-            const item = cart.items.find((row) => row.dish_id === dishId);
-            if (item) cart.updateQuantity(dishId, item.quantity + 1);
+          onIncrement={(lineId) => {
+            const item = cart.items.find((row) => row.line_id === lineId);
+            if (item) cart.updateQuantity(lineId, item.quantity + 1);
           }}
-          onDecrement={(dishId) => cart.updateQuantity(dishId, (cart.items.find((item) => item.dish_id === dishId)?.quantity ?? 1) - 1)}
+          onDecrement={(lineId) => cart.updateQuantity(lineId, (cart.items.find((item) => item.line_id === lineId)?.quantity ?? 1) - 1)}
           onRemove={cart.removeItem}
           onNotes={cart.updateNotes}
           onSubmit={submitOrder}

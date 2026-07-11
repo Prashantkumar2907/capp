@@ -18,6 +18,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { createClient } from "@/lib/supabase/client";
 import { getBranchMenu } from "@/lib/supabase/queries";
 import { formatCurrency } from "@/lib/utils";
+import { DishOptionsEditor } from "@/components/features/menu/dish-options-editor";
 import { useAuth } from "@/features/auth/auth-provider";
 import type { Category, DishWithRelations } from "@/types/database";
 
@@ -188,6 +189,19 @@ export default function MenuPage() {
           <Field label="Category"><Select value={dishForm.category_id} onChange={(event) => setDishForm({ ...dishForm, category_id: event.target.value })}><option value="">Uncategorized</option>{menu.data?.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</Select></Field>
           <div className="flex items-center justify-between rounded-xl border p-3 text-sm">Vegetarian<Switch checked={dishForm.is_veg} onCheckedChange={(checked) => setDishForm({ ...dishForm, is_veg: checked })} /></div>
           <div className="flex items-center justify-between rounded-xl border p-3 text-sm">Active<Switch checked={dishForm.is_active} onCheckedChange={(checked) => setDishForm({ ...dishForm, is_active: checked })} /></div>
+          {editingDish ? (
+            <div className="rounded-2xl border bg-secondary/40 p-3">
+              <DishOptionsEditor
+                dishId={editingDish.id}
+                variants={menu.data?.dishes.find((dish) => dish.id === editingDish.id)?.dish_variants ?? []}
+                addons={menu.data?.dishes.find((dish) => dish.id === editingDish.id)?.dish_addons ?? []}
+              />
+            </div>
+          ) : (
+            <p className="rounded-xl border border-dashed p-3 text-xs text-muted-foreground">
+              Save the dish first, then edit it to add sizes (Half/Full) and add-ons.
+            </p>
+          )}
           <Button className="w-full" disabled={!dishForm.name || saveDish.isPending} onClick={() => saveDish.mutate()}>Save dish</Button>
         </div>
       </Dialog>

@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DishTile } from "@/components/features/menu/dish-tile";
+import { DishOptionsDialog } from "@/components/features/menu/dish-options-dialog";
 import { CartPanel } from "@/components/features/cart/cart-panel";
 import { calculateTotals } from "@/lib/utils";
 import { useCartStore } from "@/stores/cart-store";
@@ -37,6 +38,7 @@ export default function PublicOrderPage() {
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("all");
   const cart = useCartStore();
+  const [optionsDish, setOptionsDish] = useState<DishWithRelations | null>(null);
 
   useEffect(() => {
     if (branchId && tableNumber) cart.setContext(branchId, tableNumber);
@@ -65,6 +67,11 @@ export default function PublicOrderPage() {
   const totals = calculateTotals(subtotal, Number(menu.data?.branch.organizations?.default_tax_percent ?? 5), Boolean(menu.data?.branch.organizations?.tax_inclusive ?? true));
 
   const addDish = (dish: DishWithRelations) => {
+    const hasOptions = (dish.dish_variants?.length ?? 0) > 0 || (dish.dish_addons?.length ?? 0) > 0;
+    if (hasOptions) {
+      setOptionsDish(dish);
+      return;
+    }
     cart.addItem({
       dish_id: dish.id,
       dish_name: dish.name,
@@ -135,9 +142,9 @@ export default function PublicOrderPage() {
                 <DishTile
                   key={dish.id}
                   dish={dish}
-                  quantity={cart.items.find((item) => item.dish_id === dish.id)?.quantity ?? 0}
+                  quantity={cart.dishQuantity(dish.id)}
                   onAdd={() => addDish(dish)}
-                  onRemove={() => cart.updateQuantity(dish.id, (cart.items.find((item) => item.dish_id === dish.id)?.quantity ?? 1) - 1)}
+                  onRemove={() => cart.decrementDish(dish.id)}
                 />
               ))}
             </div>
@@ -150,11 +157,11 @@ export default function PublicOrderPage() {
             tax={totals.tax}
             total={totals.total}
             submitLabel="Review order"
-            onIncrement={(dishId) => {
-              const dish = menu.data?.dishes.find((item) => item.id === dishId);
-              if (dish) addDish(dish);
+            onIncrement={(lineId) => {
+              const line = cart.items.find((item) => item.line_id === lineId);
+              if (line) cart.updateQuantity(lineId, line.quantity + 1);
             }}
-            onDecrement={(dishId) => cart.updateQuantity(dishId, (cart.items.find((item) => item.dish_id === dishId)?.quantity ?? 1) - 1)}
+            onDecrement={(lineId) => cart.updateQuantity(lineId, (cart.items.find((item) => item.line_id === lineId)?.quantity ?? 1) - 1)}
             onRemove={cart.removeItem}
             onNotes={cart.updateNotes}
             onSubmit={() => router.push(`/order/${branchId}/${tableNumber}/payment`)}
@@ -172,6 +179,26 @@ export default function PublicOrderPage() {
           </Link>
         </div>
       ) : null}
+      <DishOptionsDialog
+        dish={optionsDish}
+        open={!!optionsDish}
+        onOpenChange={(open) => !open && setOptionsDish(null)}
+        onConfirm={(selection) => {
+          if (!optionsDish) return;
+          cart.addItem({
+            dish_id: optionsDish.id,
+            dish_name: optionsDish.name,
+            unit_price: selection.unit_price,
+            variant_id: selection.variant_id,
+            variant_name: selection.variant_name,
+            addon_ids: selection.addon_ids,
+            addon_names: selection.addon_names,
+            addon_total: selection.addon_total,
+            image_url: optionsDish.image_url,
+            is_veg: optionsDish.is_veg,
+          });
+        }}
+      />
     </main>
   );
 }

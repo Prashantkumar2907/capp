@@ -23,13 +23,13 @@ The same role-capability system serves both: small = one user holds all roles; l
 
 | Item | Status | Notes |
 |---|---|---|
-| Verify proxy.ts middleware | ✅ correct | Next 16 renamed middleware→proxy; our file follows the new convention properly |
-| Upgrade Next 16.2.5 → 16.2.6+ | ☐ | May 2026 release patched 13 CVEs incl. 3 auth-bypass |
-| Audit API route self-auth | ☐ | proxy excludes /api/* by design (proxy = UX layer, not security boundary). Every route handler must verify user + org itself. Public routes (menu, order create, receipt, webhook) stay anon but must validate inputs hard |
-| Transactional order creation | ☐ | Move orders+items+payments insert into one Postgres function |
-| Realtime publication check | ☐ | orders, order_items, branch_dishes |
-| Env validation on boot | ☐ | fail loudly on misconfig |
-| Multi-role schema (staff_roles) | ☐ | prerequisite for everything below |
+| Verify proxy.ts middleware | ✅ correct | Next 16 renamed middleware→proxy; build output confirms `ƒ Proxy (Middleware)` active |
+| Upgrade Next 16.2.5 → 16.2.6+ | ✅ done | May 2026 release patched 13 CVEs incl. 3 auth-bypass |
+| Audit API route self-auth | ✅ done | Found+fixed critical: status route had no auth on service-role client. New `requireStaff()` guard (src/lib/api/auth.ts). Other routes verified OK |
+| Transactional order creation | ✅ done | `create_order()` fn (06_create_order_fn.sql), server-side pricing, tested against local PG16: atomicity + all error paths verified. API route rewired to RPC |
+| Realtime publication check | ✅ done | orders/order_items/payments were present; added branch_dishes (live out-of-stock) + tables (live floor status) |
+| Env validation on boot | ✅ existed | src/lib/env.ts already fails loudly |
+| Multi-role schema (staff_roles) | ✅ done | 07_staff_roles.sql: backfill + sync trigger + app_user_roles()/app_user_has_role() + RLS, tested. UI/policy adoption is Phase 1 |
 
 ---
 
@@ -105,8 +105,14 @@ The same role-capability system serves both: small = one user holds all roles; l
 
 **Phase 0 — Foundations** (§1 table). Exit: all items checked.
 
-**Phase 1 — Core loop, India-ready basics.**
-Multi-role users → variants + add-ons → waiter POS (open orders, add/remove, search) → KOT screen with accept/cooking/ready + out-of-stock toggle → cashier mark-paid/complete → order types (dine-in/takeaway/counter). Exit: one real restaurant runs a full service day.
+**Phase 1 — Core loop, India-ready basics. ✅ COMPLETE (pending real-restaurant exit test)**
+- [x] Multi-role users end to end (staff_roles + union-based UI + 08_rls_multirole.sql, RLS-verified)
+- [x] The Counter: unified one-screen home (live orders + earnings + out-of-stock toggles)
+- [x] Dish variants (Half/Full) + add-ons: 09 migration, create_order v2 with server-side variant/addon pricing (tested: 2×(150+30)=360, cross-dish variant spoofing rejected), customer picker dialog, cart v3 (line-based, unit-tested), kitchen tickets show variant+addons, menu dialog editor for owners
+- [x] Waiter POS: New-order tab (dine-in/takeaway/counter modes, variants) + Open-orders tab — add dishes to a running order, remove lines; totals + pending payment recomputed atomically in DB (add_order_items/remove_order_item, tested: 80→420→340, served orders locked)
+- [x] Counter/token mode: order_type 'counter', token = order number suffix, shown on kitchen tickets
+- [x] KOT kitchen polish: variant/addon/notes on tickets, cancelled lines hidden, token/takeaway labels
+Exit criterion still open: one real restaurant runs a full service day.
 
 **Phase 2 — Compliance & money.**
 GST split + GSTIN/FSSAI on receipts + invoice numbering → service charge + discounts → cash/split payments → Z-report → veg/non-veg marks → KOT thermal print (browser) → role-login provisioning UI (owner-generated credentials, server-only admin API). Exit: a restaurant can legally hand a customer our bill.

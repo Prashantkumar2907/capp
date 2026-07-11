@@ -54,7 +54,7 @@ export async function getDashboardSummary(supabase: TypedSupabase, branchId: str
 export async function getBranchMenu(supabase: TypedSupabase, orgId: string) {
   const [{ data: categories, error: categoryError }, { data: dishes, error: dishError }] = await Promise.all([
     supabase.from("categories").select("*").eq("org_id", orgId).order("sort_order"),
-    supabase.from("dishes").select("*, categories(name), branch_dishes(*)").eq("org_id", orgId).order("name"),
+    supabase.from("dishes").select("*, categories(name), branch_dishes(*), dish_variants(*), dish_addons(*)").eq("org_id", orgId).order("name"),
   ]);
   if (categoryError) throw categoryError;
   if (dishError) throw dishError;

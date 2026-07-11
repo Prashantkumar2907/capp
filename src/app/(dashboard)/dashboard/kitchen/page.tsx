@@ -95,9 +95,11 @@ export default function KitchenPage() {
                         <CardContent className="space-y-4 p-4">
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <p className="font-numbers text-sm font-semibold">#{order.order_number}</p>
+                              <p className="font-numbers text-sm font-semibold">
+                                {order.order_type === "counter" ? `Token ${order.order_number.split("-").pop()}` : `#${order.order_number}`}
+                              </p>
                               <p className="mt-1 text-xs text-muted-foreground">
-                                {order.table_number ? `Table ${order.table_number} | ` : ""}
+                                {order.table_number ? `Table ${order.table_number} | ` : order.order_type === "takeaway" ? "Takeaway | " : order.order_type === "counter" ? "Counter | " : ""}
                                 {timeAgo(order.created_at)}
                               </p>
                             </div>
@@ -106,15 +108,25 @@ export default function KitchenPage() {
                             </div>
                           </div>
                           <div className="space-y-2">
-                            {order.order_items.map((item) => (
-                              <div key={item.id} className="rounded-xl bg-secondary p-3">
-                                <div className="flex justify-between gap-3">
-                                  <p className="text-sm font-medium">{item.dish_name}</p>
-                                  <span className="font-numbers text-sm font-semibold">x{item.quantity}</span>
+                            {order.order_items
+                              .filter((item) => item.status !== "cancelled")
+                              .map((item) => (
+                                <div key={item.id} className="rounded-xl bg-secondary p-3">
+                                  <div className="flex justify-between gap-3">
+                                    <p className="text-sm font-medium">
+                                      {item.dish_name}
+                                      {item.variant_name ? <span className="text-muted-foreground"> · {item.variant_name}</span> : null}
+                                    </p>
+                                    <span className="font-numbers text-sm font-semibold">x{item.quantity}</span>
+                                  </div>
+                                  {Array.isArray(item.addons) && item.addons.length ? (
+                                    <p className="mt-1 text-xs font-medium text-primary">
+                                      + {(item.addons as { name: string }[]).map((addon) => addon.name).join(", ")}
+                                    </p>
+                                  ) : null}
+                                  {item.notes ? <p className="mt-1 text-xs text-muted-foreground">{item.notes}</p> : null}
                                 </div>
-                                {item.notes ? <p className="mt-1 text-xs text-muted-foreground">{item.notes}</p> : null}
-                              </div>
-                            ))}
+                              ))}
                           </div>
                           {column.action ? (
                             <Button className="w-full" disabled={busyId === order.id} onClick={() => void updateStatus(order, column.action!)}>
