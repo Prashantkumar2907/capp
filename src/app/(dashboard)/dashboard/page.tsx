@@ -20,6 +20,7 @@ import { formatCurrency } from "@/lib/utils";
 import { type OrderStatus } from "@/lib/constants";
 import { useRealtimeOrders } from "@/hooks/use-realtime-orders";
 import { useAuth } from "@/features/auth/auth-provider";
+import { SetupChecklist } from "@/components/features/dashboard/setup-checklist";
 import { useT } from "@/lib/i18n";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -84,6 +85,8 @@ export default function CounterPage() {
           ) : undefined
         }
       />
+
+      {canAccess("menu") ? <SetupChecklist /> : null}
 
       <div className="grid gap-3 grid-cols-2 xl:grid-cols-4">
         <StatCard label={t("counter.todaysEarnings")} value={formatCurrency(summary?.revenue ?? 0)} icon={IndianRupee} />

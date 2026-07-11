@@ -167,6 +167,13 @@ Exit: first paid subscription.
 - [x] Item-level kitchen granularity (set_item_status + order roll-up): mark one item ready while others cook; order status derived from items (any cooking→preparing, all ready→ready, all served→served). Per-item "Mark ready" buttons on kitchen tickets. DB-tested: naan ready→order preparing, all ready→order ready
 - [x] Rate limiting on the public order endpoint (rate-limit.ts): per branch+IP sliding window (8/min), QR/anonymous only — staff sources exempt. Live-verified: 8 pass, 9th+10th return 429. Unit-tested. In-memory (swap for Redis for multi-instance later)
 
+**Tier-3 robustness + first-run (deployment readiness).**
+- [x] Error boundaries: (dashboard)/error.tsx (retry, reassures data is safe) + global-error.tsx (dependency-free inline styles so it renders even if CSS fails) — a broken query no longer blanks the app
+- [x] not-found.tsx: calm app-wide 404 with one clear way back
+- [x] (dashboard)/loading.tsx: route-level skeleton (header + stats + content) so tab switches never flash blank
+- [x] First-run SetupChecklist on the Counter: guides a brand-new owner (esp. "Start empty") through add-dishes → tables/QR → staff → first-order with live progress; auto-hides once menu + first order exist. The make-or-break moment for the non-technical persona
+- [x] Verified empty-DB resilience (all divisions guarded, reduces seeded) and that the proxy correctly sends logged-out users on unknown paths to sign-in (security posture, not a bug); 404 serves for authed users + public typos
+
 **Phase 5 — Earned expansions.** Aggregators, inventory, more languages — driven by paying-customer demand only.
 
 ---
