@@ -45,7 +45,7 @@ const navItems: Array<{ href: string; label: string; icon: React.ComponentType<{
 ];
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
-  const { user, staff, organization, branch, loading, role, roles, canAccess, signOut } = useAuth();
+  const { user, staff, organization, branch, loading, role, roles, plan, canAccess, signOut } = useAuth();
   const t = useT();
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
@@ -183,4 +183,26 @@ function roleSummary(primary: import("@/lib/constants").Role | null, roles: impo
   if (!primary) return "";
   const extra = roles.filter((held) => held !== primary).length;
   return extra > 0 ? `${roleLabels[primary]} +${extra}` : roleLabels[primary];
+}
+
+
+function PlanBanner({ effective, daysLeft, canManage }: { effective: string; daysLeft: number | null; canManage: boolean }) {
+  if (effective === "trial" && (daysLeft === null || daysLeft > 7)) return null; // quiet early-trial
+  const tone = effective === "expired" ? "bg-destructive/10 text-destructive" : "bg-warning/10 text-warning-foreground";
+  const message =
+    effective === "trial"
+      ? `Free trial: ${daysLeft ?? 0} day${daysLeft === 1 ? "" : "s"} left`
+      : effective === "grace"
+        ? `Payment due — ${daysLeft ?? 0} grace day${daysLeft === 1 ? "" : "s"} before growth actions pause`
+        : "Subscription expired. Orders and billing keep working; adding branches or staff is paused.";
+  return (
+    <div className={`mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl px-4 py-2.5 text-sm ${tone}`}>
+      <span>{message}</span>
+      {canManage ? (
+        <Link href="/dashboard/settings" className="text-xs font-semibold underline underline-offset-2">
+          Manage plan
+        </Link>
+      ) : null}
+    </div>
+  );
 }

@@ -46,7 +46,12 @@ export default function BranchesPage() {
         return;
       }
       const { error } = await supabase.from("branches").insert({ ...form, org_id: organization!.id });
-      if (error) throw error;
+      if (error) {
+        if (error.message.includes("PLAN_LIMIT")) {
+          throw new Error("Branch limit reached for your plan — upgrade in Settings to add more branches");
+        }
+        throw error;
+      }
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["branches"] });

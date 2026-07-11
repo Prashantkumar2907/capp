@@ -15,6 +15,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/features/auth/auth-provider";
 import { useLocale, type Locale } from "@/lib/i18n";
+import { BillingCard } from "@/components/features/billing/billing-card";
 import { ChefHat, Plus, Trash2 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -92,6 +93,7 @@ export default function SettingsPage() {
       <PageHeader title="Settings" description="Control restaurant identity, tax, payment, appearance, and subscription details." />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="space-y-4">
+          <BillingCard />
           <Card>
             <CardContent className="space-y-4 p-4">
               <SectionTitle icon={Building2} title="Restaurant" description="Business identity and tax defaults." />

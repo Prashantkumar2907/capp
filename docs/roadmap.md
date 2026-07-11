@@ -139,8 +139,16 @@ Exit: a restaurant can legally hand a customer our bill.
 **Phase 3 exit criterion: a 50+ cover restaurant runs on it — pending live pilot.**
 Exit: a 50+ cover restaurant runs on it.
 
-**Phase 4 — Monetization.**
-Plans, Razorpay subscriptions, gating, billing lifecycle. Exit: first paid subscription.
+**Phase 4 — Monetization. ✅ BUILT (pending Razorpay account + live checkout test)**
+- [x] Plans (src/lib/plans.ts): Starter ₹499 (1 branch), Growth ₹1499 (3 branches, stations, analytics, WhatsApp), Pro ₹3999 (unlimited). Trial = 14 days of full Pro; 5-day grace after any expiry
+- [x] Lifecycle (14_subscription_lifecycle.sql): trial_ends_at tracking + backfill + default; plan_branch_limit + org_can_add_branch + BEFORE INSERT trigger — DB-tested across all six states (trial multi-branch OK, expired trial frozen, starter capped 1, growth capped 3, pro unlimited)
+- [x] Philosophy enforced: expiry NEVER bricks live service (orders/kitchen/settle keep working) — it only pauses growth actions (new branches via DB trigger, new staff logins via 402 in provisioning API)
+- [x] effectiveState() resolver (trial|active|grace|expired), unit-tested incl. trial→grace→expired transitions and plan-limit consistency with the DB function
+- [x] Auth context loads subscription + resolved plan; dashboard banner (quiet until last 7 trial days; warns in grace; explains expiry)
+- [x] Billing card in Settings: plan cards with features, trial countdown, upgrade → /api/billing/subscribe (owner/admin) → Razorpay Subscriptions REST → Razorpay Checkout JS loaded on demand; graceful 503 "contact support" without env
+- [x] Webhook extended: subscription.activated/charged/resumed→active, halted/pending→past_due, cancelled/completed→cancelled; period dates from event; matches by stored razorpay_subscription_id with notes fallback
+- [ ] LIVE: create the three plans in the Razorpay dashboard, set env, run a real checkout
+Exit: first paid subscription.
 
 **Phase 5 — Earned expansions.** Aggregators, inventory, more languages — driven by paying-customer demand only.
 

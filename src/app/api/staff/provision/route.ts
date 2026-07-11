@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { requireStaff } from "@/lib/api/auth";
 import { roles as allRoles, type Role } from "@/lib/constants";
+import { effectiveState, canGrow } from "@/lib/plans";
 
 /**
  * Owner-generated staff logins ("shared kitchen tablet" model).
@@ -51,6 +52,19 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminSupabase();
+
+  // growth-action gate: expired subscriptions can't add staff (live service unaffected)
+  const { data: subRow } = await admin
+    .from("subscriptions")
+    .select("plan, status, trial_ends_at, current_period_end")
+    .eq("org_id", guard.staff.orgId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const billing = effectiveState(subRow);
+  if (!canGrow(billing.effective)) {
+    return NextResponse.json({ error: "Subscription expired — renew to add staff logins" }, { status: 402 });
+  }
 
   const { data: org } = await admin.from("organizations").select("slug").eq("id", guard.staff.orgId).single();
   if (!org) return NextResponse.json({ error: "Organization not found" }, { status: 404 });

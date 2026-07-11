@@ -4,7 +4,8 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { roleAccess, type Role } from "@/lib/constants";
-import type { Branch, Organization, Staff } from "@/types/database";
+import type { Branch, Organization, Staff, Subscription } from "@/types/database";
+import { effectiveState, type PlanId, type SubscriptionEffective } from "@/lib/plans";
 
 interface AuthState {
   user: User | null;
@@ -12,10 +13,13 @@ interface AuthState {
   organization: Organization | null;
   branch: Branch | null;
   roles: Role[];
+  subscription: Subscription | null;
   loading: boolean;
 }
 
 interface AuthContextValue extends AuthState {
+  /** Resolved billing state: trial | active | grace | expired + effective plan. */
+  plan: { effective: SubscriptionEffective; plan: PlanId; daysLeft: number | null };
   /** Primary role, used for display. Capability checks should use hasRole/canAccess. */
   role: Role | null;
   /** True when the user holds ANY of the given roles. */
@@ -35,12 +39,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     organization: null,
     branch: null,
     roles: [],
+    subscription: null,
     loading: true,
   });
 
   const loadProfile = useCallback(async (user: User | null) => {
     if (!user) {
-      setState({ user: null, staff: null, organization: null, branch: null, roles: [], loading: false });
+      setState({ user: null, staff: null, organization: null, branch: null, roles: [], subscription: null, loading: false });
       return;
     }
 
@@ -52,14 +57,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .maybeSingle();
 
     if (!staff) {
-      setState({ user, staff: null, organization: null, branch: null, roles: [], loading: false });
+      setState({ user, staff: null, organization: null, branch: null, roles: [], subscription: null, loading: false });
       return;
     }
 
-    const [{ data: organization }, { data: branch }, { data: roleRows }] = await Promise.all([
+    const [{ data: organization }, { data: branch }, { data: roleRows }, { data: subscription }] = await Promise.all([
       supabase.from("organizations").select("*").eq("id", staff.org_id).maybeSingle(),
       staff.branch_id ? supabase.from("branches").select("*").eq("id", staff.branch_id).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from("staff_roles").select("role").eq("staff_id", staff.id),
+      supabase.from("subscriptions").select("*").eq("org_id", staff.org_id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
 
     // A user always holds at least their primary role, even if staff_roles
@@ -67,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const roleSet = new Set<Role>([staff.role as Role]);
     (roleRows ?? []).forEach((row) => roleSet.add(row.role as Role));
 
-    setState({ user, staff, organization, branch, roles: [...roleSet], loading: false });
+    setState({ user, staff, organization, branch, roles: [...roleSet], subscription: subscription ?? null, loading: false });
   }, [supabase]);
 
   useEffect(() => {
@@ -107,9 +113,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loadProfile, supabase]);
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-    setState({ user: null, staff: null, organization: null, branch: null, roles: [], loading: false });
+    setState({ user: null, staff: null, organization: null, branch: null, roles: [], subscription: null, loading: false });
   }, [supabase]);
-  const value: AuthContextValue = { ...state, role, hasRole, canAccess, refresh, signOut };
+  const plan = effectiveState(state.subscription);
+  const value: AuthContextValue = { ...state, role, plan, hasRole, canAccess, refresh, signOut };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

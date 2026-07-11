@@ -368,6 +368,7 @@ export type Subscription = {
   plan: string;
   status: string;
   razorpay_subscription_id: string | null;
+  trial_ends_at?: string | null;
   current_period_start: string | null;
   current_period_end: string | null;
   created_at: string;
