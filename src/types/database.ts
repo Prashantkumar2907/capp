@@ -156,6 +156,8 @@ export interface Database {
       app_user_roles: { Args: Record<string, never>; Returns: string[] };
       app_user_has_role: { Args: { check_roles: string[] }; Returns: boolean };
       add_order_items: { Args: { p_order_id: string; p_items: Json }; Returns: Json };
+      move_order_table: { Args: { p_order_id: string; p_table_number: number }; Returns: Json };
+      merge_orders: { Args: { p_source_order_id: string; p_target_order_id: string }; Returns: Json };
       apply_discount: { Args: { p_order_id: string; p_amount: number; p_reason?: string | null; p_staff_id?: string | null }; Returns: Json };
       record_split_payment: { Args: { p_order_id: string; p_amount: number; p_method: string }; Returns: Json };
       remove_order_item: { Args: { p_order_id: string; p_item_id: string }; Returns: Json };

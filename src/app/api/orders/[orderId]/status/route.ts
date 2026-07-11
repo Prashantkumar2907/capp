@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { requireStaff } from "@/lib/api/auth";
+import { sendWhatsApp, orderReadyMessage } from "@/lib/notify-whatsapp";
 import { orderStatuses, type OrderStatus } from "@/lib/constants";
 
 interface Params {
@@ -41,6 +42,19 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   const { data: order, error } = await admin.from("orders").update({ status: body.status }).eq("id", orderId).select("*").single();
+
+  // Customer WhatsApp ping when food is ready — fire-and-forget, never blocks
+  if (!error && order && body.status === "ready" && order.customer_phone) {
+    const { data: branchRow } = await admin
+      .from("branches")
+      .select("name, organizations(name)")
+      .eq("id", order.branch_id)
+      .maybeSingle();
+    const orgName = (branchRow?.organizations as { name?: string } | { name?: string }[] | null | undefined);
+    const restaurantName = (Array.isArray(orgName) ? orgName[0]?.name : orgName?.name) ?? branchRow?.name ?? "Your restaurant";
+    const receiptUrl = process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL}/receipt/${order.id}` : undefined;
+    void sendWhatsApp(order.customer_phone, orderReadyMessage(order.order_number, restaurantName, receiptUrl));
+  }
 
   if (error || !order) {
     return NextResponse.json({ error: error?.message ?? "Order not found" }, { status: 400 });

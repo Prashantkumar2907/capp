@@ -132,9 +132,9 @@ Exit: a restaurant can legally hand a customer our bill.
 **Phase 3 — Scale features.** (in progress)
 - [x] Station routing (12_stations.sql): stations per branch (Settings card, manager+), categories map to stations (Menu page — categories now editable with station badges; edit was previously dead code), order items snapshot station_id/name at order time in both create_order and add_order_items (DB-tested: Naan→Tandoor, Noodles→Chinese, open-order adds snapshot too); kitchen board gets station filter pills — tickets show only that station's items, ticket/queue counts follow
 - [x] Multi-branch analytics: owner/admin-only branch comparison (revenue bar chart + per-branch order counts over the selected window); auto-hides for single-branch orgs
-- [ ] WhatsApp order-ready + receipt notifications (needs provider account — Gupshup/Twilio)
-- [ ] Hindi staff UI (next-intl string extraction)
-- [ ] Table merge/split
+- [x] Table transfer + merge (13_table_operations.sql): move_order_table (frees old table only when nothing else runs on it, blocks occupied targets), merge_orders (items move to target, totals recomputed, source cancelled + pending payment failed + table freed, deadlock-safe lock ordering); waiter open-order panel gets Move table… / Merge into… selectors. DB-tested end to end
+- [x] WhatsApp scaffold: provider-abstracted sendWhatsApp (gupshup | meta | disabled default no-op), Indian phone normalization, fire-and-forget on order→ready with restaurant name + receipt link; env template added. BLOCKED ON: provider account + approved message templates for production
+- [ ] Hindi staff UI (next-intl string extraction — dedicated session, touches every file)
 Exit: a 50+ cover restaurant runs on it.
 
 **Phase 4 — Monetization.**

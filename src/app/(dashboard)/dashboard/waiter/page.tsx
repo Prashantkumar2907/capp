@@ -218,6 +218,28 @@ export default function WaiterPage() {
     }
   };
 
+  const tableAction = async (body: { action: "move"; tableNumber: number } | { action: "merge"; targetOrderId: string }) => {
+    if (!selectedOrder) return;
+    try {
+      const response = await fetch(`/api/orders/${selectedOrder.id}/table`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const payload = (await response.json()) as { error?: string; order?: { id: string } };
+      if (!response.ok) throw new Error(payload.error ?? "Unable to update tables");
+      await Promise.all([refreshOrders(), queryClient.invalidateQueries({ queryKey: ["tables"] })]);
+      if (body.action === "merge") {
+        setSelectedOrderId(payload.order?.id ?? null);
+        toast.success("Orders merged");
+      } else {
+        toast.success(`Moved to table ${body.tableNumber}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to update tables");
+    }
+  };
+
   const applyDiscount = async () => {
     if (!selectedOrder) return;
     try {
@@ -424,6 +446,41 @@ export default function WaiterPage() {
                     {Number(selectedOrder.discount) > 0 ? "Edit discount" : "Apply discount"}
                   </Button>
                 ) : null}
+                <div className="grid grid-cols-2 gap-2">
+                  <Select
+                    className="h-9 text-xs"
+                    value=""
+                    onChange={(event) => {
+                      const value = Number(event.target.value);
+                      if (value) void tableAction({ action: "move", tableNumber: value });
+                    }}
+                  >
+                    <option value="">Move table…</option>
+                    {tables.data
+                      ?.filter((table) => table.table_number !== selectedOrder.table_number)
+                      .map((table) => (
+                        <option key={table.id} value={table.table_number}>
+                          T{table.table_number} {table.status !== "available" ? `(${table.status})` : ""}
+                        </option>
+                      ))}
+                  </Select>
+                  <Select
+                    className="h-9 text-xs"
+                    value=""
+                    onChange={(event) => {
+                      if (event.target.value) void tableAction({ action: "merge", targetOrderId: event.target.value });
+                    }}
+                  >
+                    <option value="">Merge into…</option>
+                    {openOrders
+                      .filter((order) => order.id !== selectedOrder.id)
+                      .map((order) => (
+                        <option key={order.id} value={order.id}>
+                          #{order.order_number} {order.table_number ? `· T${order.table_number}` : ""}
+                        </option>
+                      ))}
+                  </Select>
+                </div>
                 <Badge variant="secondary" className="w-full justify-center py-1.5">
                   Tap dishes on the left to add to this order
                 </Badge>
